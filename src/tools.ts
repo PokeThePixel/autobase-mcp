@@ -5,12 +5,15 @@ import { AutobaseApiError } from "./api-client";
 import { redactOperationLog, redactText } from "./redaction";
 import type {
   Cluster,
+  ClusterBackup,
   Deployment,
   Environment,
   Operation,
+  PostgresParameter,
   Project,
 } from "./schemas";
 import {
+  clusterAccessInputSchema,
   clusterCreateInputSchema,
   clusterManageInputSchema,
   environmentCreateInputSchema,
@@ -40,6 +43,8 @@ const writeConfirmation = z
   .describe("Set to true only after the user explicitly requests this write.");
 const sensitiveKeyPattern =
   /(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|credential|authorization|connection_info|extra_vars|inventory)/i;
+const sensitivePostgresParameterPattern =
+  /(?:password|passwd|secret|token|credential|private|conninfo|command|key|passphrase)/i;
 
 function jsonResult(
   value: unknown,
@@ -162,6 +167,39 @@ function environmentForTool(environment: Environment) {
   };
 }
 
+function backupForTool(backup: ClusterBackup) {
+  return {
+    id: backup.id,
+    startedAt: backup.started_at,
+    finishedAt: backup.finished_at,
+    durationSeconds: backup.duration_seconds,
+    type: backup.type,
+    sizeBytes: backup.size_bytes,
+  };
+}
+
+export function postgresParameterForTool(
+  parameter: PostgresParameter,
+  apiToken: string,
+) {
+  const setting =
+    parameter.name && sensitivePostgresParameterPattern.test(parameter.name)
+      ? null
+      : typeof parameter.setting === "string"
+        ? redactText(parameter.setting, apiToken)
+        : parameter.setting;
+
+  return {
+    name: parameter.name,
+    setting,
+    description: parameter.description,
+    category: parameter.category,
+    context: parameter.context,
+    restart: parameter.restart,
+    changed: parameter.changed,
+  };
+}
+
 export function deploymentForTool(deployment: Deployment) {
   return {
     code: deployment.code,
@@ -229,6 +267,8 @@ export function clusterForTool(cluster: Cluster) {
     postgresVersion: cluster.postgres_version,
     location: cluster.cluster_location,
     projectName: cluster.project_name,
+    cloudAccessReferenceId: cluster.cloud_secret_id,
+    serverAccessReferenceId: cluster.server_secret_id,
     servers: cluster.servers?.map((server) => ({
       id: server.id,
       name: server.name,
@@ -251,6 +291,7 @@ function operationForTool(operation: Operation) {
     type: operation.type,
     status: operation.status,
     environment: operation.environment,
+    user: operation.user,
   };
 }
 
@@ -419,6 +460,16 @@ export function registerTools(
   registerReadTool(
     server,
     apiToken,
+    "autobase_get_operation",
+    "Read a single operation's status and metadata.",
+    z.object({ operationId: z.number().int().positive() }),
+    async ({ operationId }) =>
+      operationForTool(await api.getOperation(operationId)),
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
     "autobase_get_operation_log",
     "Read an operation's log. Known credential formats and the Console API token are redacted; output is capped at 20,000 characters.",
     z.object({ operationId: z.number().int().positive() }),
@@ -445,6 +496,26 @@ export function registerTools(
           releaseDate: version.release_date,
           endOfLife: version.end_of_life,
         })),
+      };
+    },
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
+    "autobase_list_postgres_parameters",
+    "List PostgreSQL parameters and effective values for a cluster or PostgreSQL major version. Values for credential and command parameters are withheld.",
+    z.object({
+      clusterId: z.number().int().positive().optional(),
+      postgresVersion: z.number().int().positive().optional(),
+    }),
+    async (input) => {
+      const response = await api.listPostgresParameters(input);
+      return {
+        data: response.data.map((parameter) =>
+          postgresParameterForTool(parameter, apiToken),
+        ),
+        meta: response.meta,
       };
     },
   );
@@ -623,6 +694,41 @@ export function registerTools(
     { destructive: false, idempotent: true },
     async ({ clusterId }) =>
       clusterForTool(await api.refreshCluster(clusterId)),
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_update_cluster_access",
+    "Validate and store references to existing cloud-provider or server-access secrets for a cluster. Secret values are not accepted. Requires an explicit user request and confirm: true.",
+    z.object({
+      clusterId: z.number().int().positive(),
+      ...clusterAccessInputSchema.shape,
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: true },
+    async ({ clusterId, confirm: _confirm, authInfo }) => {
+      void _confirm;
+      return clusterForTool(
+        await api.updateClusterAccess(clusterId, { authInfo }),
+      );
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_list_cluster_backups",
+    "Runs the Console backup-list playbook against the cluster and returns normalized backup records. This starts a remote Ansible task, so it requires an explicit user request and confirm: true.",
+    z.object({
+      clusterId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: false, idempotent: true },
+    async ({ clusterId }) => {
+      const response = await api.getClusterBackups(clusterId);
+      return { data: response.data.map(backupForTool) };
+    },
   );
 
   registerWriteTool(

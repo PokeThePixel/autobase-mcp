@@ -335,6 +335,109 @@ describe("AutobaseApiClient", () => {
     ).resolves.toEqual({ cluster_id: 12, operation_id: 35 });
   });
 
+  test("updates stored cluster access using secret references", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/clusters/12/access",
+        );
+        expect(init?.method).toBe("PATCH");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          auth_info: { cloud_secret_id: 7, server_secret_id: 9 },
+        });
+        return Response.json({
+          id: 12,
+          name: "analytics",
+          cloud_secret_id: 7,
+          server_secret_id: 9,
+          extra_vars: "private configuration",
+        });
+      },
+    });
+
+    await expect(
+      client.updateClusterAccess(12, {
+        authInfo: { cloudSecretId: 7, serverSecretId: 9 },
+      }),
+    ).resolves.toMatchObject({
+      id: 12,
+      cloud_secret_id: 7,
+      server_secret_id: 9,
+    });
+  });
+
+  test("loads normalized cluster backups", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/clusters/12/backup-list",
+        );
+        return Response.json({
+          data: [{ id: "20260928-full", type: "full", size_bytes: 1024 }],
+        });
+      },
+    });
+
+    await expect(client.getClusterBackups(12)).resolves.toMatchObject({
+      data: [{ id: "20260928-full", type: "full", size_bytes: 1024 }],
+    });
+  });
+
+  test("queries PostgreSQL parameters and resolves a single operation", async () => {
+    const paths: string[] = [];
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        paths.push(url.pathname);
+        if (url.pathname.endsWith("/postgres_parameters")) {
+          expect(url.searchParams.get("cluster_id")).toBe("12");
+          expect(url.searchParams.get("postgres_version")).toBe("17");
+          return Response.json({
+            data: [
+              {
+                name: "work_mem",
+                setting: "64MB",
+                restart: false,
+                changed: true,
+              },
+            ],
+            meta: { source: "patroni" },
+          });
+        }
+
+        return Response.json({
+          id: 35,
+          cluster_name: "analytics",
+          status: "success",
+          user: "operator",
+        });
+      },
+    });
+
+    await expect(
+      client.listPostgresParameters({ clusterId: 12, postgresVersion: 17 }),
+    ).resolves.toMatchObject({
+      data: [{ name: "work_mem", setting: "64MB" }],
+      meta: { source: "patroni" },
+    });
+    await expect(client.getOperation(35)).resolves.toMatchObject({
+      id: 35,
+      cluster_name: "analytics",
+      status: "success",
+      user: "operator",
+    });
+    expect(paths).toEqual([
+      "/api/v1/postgres_parameters",
+      "/api/v1/operations/35",
+    ]);
+  });
+
   test("does not include API error response bodies in errors", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",

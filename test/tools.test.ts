@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clusterAccessInputSchema,
   clusterCreateInputSchema,
   clusterManageInputSchema,
   clusterSchema,
@@ -9,6 +10,7 @@ import {
   clusterForTool,
   deploymentForTool,
   paginationForTool,
+  postgresParameterForTool,
 } from "../src/tools";
 
 describe("cluster tool projection", () => {
@@ -19,6 +21,8 @@ describe("cluster tool projection", () => {
       connection_info: { password: "do-not-return" },
       extra_vars: "secret: do-not-return",
       inventory: "do-not-return",
+      cloud_secret_id: 7,
+      server_secret_id: 9,
       servers: [{ id: 9, name: "db-1", role: "leader" }],
     });
 
@@ -28,12 +32,45 @@ describe("cluster tool projection", () => {
     expect(result).toMatchObject({
       id: 4,
       name: "primary",
+      cloudAccessReferenceId: 7,
+      serverAccessReferenceId: 9,
       servers: [{ id: 9, name: "db-1", role: "leader" }],
     });
     expect(encoded).not.toContain("connection_info");
     expect(encoded).not.toContain("extra_vars");
     expect(encoded).not.toContain("inventory");
     expect(encoded).not.toContain("do-not-return");
+  });
+});
+
+describe("PostgreSQL parameter projection", () => {
+  test("redacts password values and withholds command and connection parameters", () => {
+    expect(
+      postgresParameterForTool(
+        {
+          name: "archive_command",
+          setting: "backup --password=private-value",
+          restart: false,
+          changed: true,
+        },
+        "api-token",
+      ),
+    ).toMatchObject({ name: "archive_command", setting: null });
+
+    expect(
+      postgresParameterForTool(
+        {
+          name: "work_mem",
+          setting: "password=private-value",
+          restart: false,
+          changed: false,
+        },
+        "api-token",
+      ),
+    ).toMatchObject({
+      name: "work_mem",
+      setting: "password=[REDACTED]",
+    });
   });
 });
 
@@ -168,5 +205,16 @@ describe("cluster configuration input", () => {
         authInfo: { serverPassword: "do-not-accept" },
       }).success,
     ).toBe(false);
+  });
+
+  test("requires existing secret references to update cluster access", () => {
+    expect(clusterAccessInputSchema.safeParse({ authInfo: {} }).success).toBe(
+      false,
+    );
+    expect(
+      clusterAccessInputSchema.safeParse({
+        authInfo: { cloudSecretId: 7 },
+      }).success,
+    ).toBe(true);
   });
 });

@@ -166,6 +166,57 @@ export const clusterManageInputSchema = z.strictObject({
   newNodes: z.array(clusterManageNodeSchema).min(1).optional(),
 });
 
+export const clusterAccessInputSchema = z.strictObject({
+  authInfo: z
+    .strictObject({
+      cloudSecretId: z.number().int().positive().optional(),
+      serverSecretId: z.number().int().positive().optional(),
+    })
+    .refine(
+      ({ cloudSecretId, serverSecretId }) =>
+        cloudSecretId !== undefined || serverSecretId !== undefined,
+      "Provide a cloud or server secret ID.",
+    ),
+});
+
+export const postgresParameterSchema = z
+  .object({
+    name: z.string().optional(),
+    setting: z.string().nullable().optional(),
+    description: z.string().nullable().optional(),
+    category: z.string().nullable().optional(),
+    context: z.string().nullable().optional(),
+    restart: z.boolean(),
+    changed: z.boolean().nullable(),
+  })
+  .passthrough();
+
+export const postgresParametersResponseSchema = z
+  .object({
+    data: z.array(postgresParameterSchema),
+    meta: z.object({
+      source: z.enum(["patroni", "extra_vars", "defaults"]),
+    }),
+  })
+  .passthrough();
+
+export const clusterBackupSchema = z
+  .object({
+    id: z.string().optional(),
+    started_at: z.string().nullable().optional(),
+    finished_at: z.string().nullable().optional(),
+    duration_seconds: z.number().nullable().optional(),
+    type: z.string().optional(),
+    size_bytes: z.number().nullable().optional(),
+  })
+  .passthrough();
+
+export const clusterBackupListSchema = z
+  .object({
+    data: z.array(clusterBackupSchema),
+  })
+  .passthrough();
+
 export const clusterServerSchema = z
   .object({
     id: z.number().int().optional(),
@@ -191,6 +242,8 @@ export const clusterSchema = z
     postgres_version: z.number().int().optional(),
     cluster_location: z.string().optional(),
     project_name: z.string().optional(),
+    cloud_secret_id: z.number().int().nullable().optional(),
+    server_secret_id: z.number().int().nullable().optional(),
   })
   .passthrough();
 
@@ -203,6 +256,7 @@ export const operationSchema = z
     type: z.string().optional(),
     status: z.string().optional(),
     environment: z.string().optional(),
+    user: z.string().nullable().optional(),
   })
   .passthrough();
 
@@ -247,3 +301,5 @@ export type Operation = z.infer<typeof operationSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;
 export type PostgresVersion = z.infer<typeof postgresVersionSchema>;
+export type PostgresParameter = z.infer<typeof postgresParameterSchema>;
+export type ClusterBackup = z.infer<typeof clusterBackupSchema>;

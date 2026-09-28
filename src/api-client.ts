@@ -1,5 +1,7 @@
 import type { z } from "zod";
 import {
+  type clusterAccessInputSchema,
+  clusterBackupListSchema,
   type clusterCreateInputSchema,
   clusterCreateResponseSchema,
   clusterDefaultNameSchema,
@@ -11,6 +13,7 @@ import {
   extensionSchema,
   listResponseSchema,
   operationSchema,
+  postgresParametersResponseSchema,
   type projectCreateInputSchema,
   projectSchema,
   type projectUpdateInputSchema,
@@ -76,6 +79,7 @@ type ProjectUpdateInput = z.infer<typeof projectUpdateInputSchema>;
 type EnvironmentCreateInput = z.infer<typeof environmentCreateInputSchema>;
 type ClusterCreateInput = z.infer<typeof clusterCreateInputSchema>;
 type ClusterManageInput = z.infer<typeof clusterManageInputSchema>;
+type ClusterAccessInput = z.infer<typeof clusterAccessInputSchema>;
 
 export class AutobaseApiClient {
   private readonly apiBaseUrl: URL;
@@ -222,6 +226,41 @@ export class AutobaseApiClient {
         })),
       },
     );
+  }
+
+  updateClusterAccess(clusterId: number, input: ClusterAccessInput) {
+    const { authInfo } = input;
+    return this.writeJson(
+      "PATCH",
+      `clusters/${clusterId}/access`,
+      clusterSchema,
+      {
+        auth_info: {
+          cloud_secret_id: authInfo.cloudSecretId,
+          server_secret_id: authInfo.serverSecretId,
+        },
+      },
+    );
+  }
+
+  getClusterBackups(clusterId: number) {
+    return this.get(
+      `clusters/${clusterId}/backup-list`,
+      clusterBackupListSchema,
+    );
+  }
+
+  listPostgresParameters(
+    options: { clusterId?: number; postgresVersion?: number } = {},
+  ) {
+    return this.get("postgres_parameters", postgresParametersResponseSchema, {
+      cluster_id: options.clusterId,
+      postgres_version: options.postgresVersion,
+    });
+  }
+
+  getOperation(operationId: number) {
+    return this.get(`operations/${operationId}`, operationSchema);
   }
 
   listOperations(filters: OperationFilters) {

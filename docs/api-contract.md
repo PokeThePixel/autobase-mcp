@@ -16,6 +16,8 @@ older Console image.
 
 The cluster management endpoint was added from the current Autobase API
 reference. It is not present in the pinned Swagger source revision above.
+The PostgreSQL parameter, backup-list, cluster-access, and single-operation
+endpoints are also taken from the current API reference.
 
 ## Exposed API operations
 
@@ -29,11 +31,13 @@ The MCP client calls these read endpoints:
 - `GET /clusters/default_name`
 - `GET /clusters/{id}`
 - `GET /operations`
+- `GET /operations/{id}`
 - `GET /operations/{id}/log`
 - `GET /postgres_versions`
+- `GET /postgres_parameters`
 - `GET /database/extensions`
 
-The MCP client also exposes these write endpoints:
+The MCP client also exposes these write and remote-action endpoints:
 
 - `POST /projects`
 - `PATCH /projects/{id}`
@@ -45,6 +49,8 @@ The MCP client also exposes these write endpoints:
 - `DELETE /servers/{id}`
 - `POST /clusters/{id}/refresh`
 - `POST /clusters/{id}/manage`
+- `PATCH /clusters/{id}/access`
+- `GET /clusters/{id}/backup-list`
 
 Every JSON response is parsed against a Zod schema. Tool results project API
 objects onto an explicit field allowlist. In particular, cluster results omit
@@ -76,7 +82,24 @@ not saved. The endpoint returns the cluster and operation IDs. Callers can pass
 the operation ID to `GET /operations/{id}/log` to inspect its progress and
 result.
 
-Write tools require `confirm: true`. Cluster and server delete calls remove
+`GET /postgres_parameters` accepts an optional `cluster_id` and/or
+`postgres_version`. It reports whether values came from Patroni, saved
+`extra_vars`, or defaults. The MCP withholds values for parameter names that
+look like credentials, commands, connection strings, or key paths, and redacts
+common credential patterns from remaining values.
+
+`GET /clusters/{id}/backup-list` runs the backup-list playbook. Since this GET
+starts a remote Ansible task, the MCP registers it with write tools and
+requires `confirm: true`. It returns normalized backup records.
+
+`PATCH /clusters/{id}/access` stores references to existing cloud and server
+secrets. The MCP accepts only secret IDs and returns the cluster's public
+summary, including those IDs, never the secret values.
+
+`GET /operations/{id}` returns one operation's status and metadata, including
+the user name when the Console provides it.
+
+Write tools and remote cluster actions require `confirm: true`. Cluster and server delete calls remove
 records from the Console database and do not claim to delete running
 infrastructure. Cluster creation accepts `extra_vars` and `envs` for
 provisioning. Both fields are sent to Autobase, so credentials should go

@@ -76,11 +76,13 @@ real tokens or a `.env` file.
 - `autobase_get_cluster_default_name`
 - `autobase_get_cluster`
 - `autobase_list_operations`
+- `autobase_get_operation`
 - `autobase_get_operation_log`
 - `autobase_list_postgres_versions`
+- `autobase_list_postgres_parameters`
 - `autobase_list_extensions`
 
-## Write tools
+## Write and cluster-action tools
 
 - `autobase_create_project`
 - `autobase_update_project`
@@ -92,6 +94,8 @@ real tokens or a `.env` file.
 - `autobase_delete_server`
 - `autobase_refresh_cluster`
 - `autobase_manage_cluster`
+- `autobase_update_cluster_access`
+- `autobase_list_cluster_backups`
 
 Write tools are disabled by default. Set `AUTOBASE_ENABLE_WRITE_TOOLS=true`
 in the MCP client environment or add `--enable-write-tools=true` to the
@@ -114,6 +118,12 @@ so the tool requires the same explicit write-tool opt-in and confirmation.
 The tool returns an operation ID that can be passed to
 `autobase_get_operation_log` to inspect the run.
 
+`autobase_update_cluster_access` validates and stores references to secrets
+that already exist in Console. It never accepts secret contents.
+`autobase_list_cluster_backups` runs a remote backup-list playbook. It requires
+write tools to be enabled and an explicit confirmation because it starts an
+Ansible task.
+
 List tools accept a maximum page size of 100 and return `meta.hasMore` and
 `meta.nextOffset` so callers can request the next page without fetching an
 unbounded result set. When the API omits its total count, `hasMore` is inferred
@@ -122,6 +132,9 @@ from whether the returned page fills the requested page size.
 Cluster listing supports the Console's name, status, location, environment,
 server-count, PostgreSQL-version, creation-date, and sort filters. Operation
 listing also supports the Console's documented sort fields.
+
+PostgreSQL parameter lookup can use a cluster ID or major version. It hides
+values for credential, connection, command, and key parameters.
 
 Deployment results include Console-supported regions, datacenters, instance
 types, and volume options. Raw cloud image configuration is omitted.
@@ -132,8 +145,9 @@ capped at 20,000 characters and redact common credential fields and the API
 token. This redaction is a safety measure, not a guarantee that every custom
 secret format can be detected.
 
-The server exposes no arbitrary HTTP requests, SQL, shell, Docker, or Ansible
-inputs. It does not expose settings or secrets endpoints.
+The server exposes no arbitrary HTTP requests, SQL, shell, or Docker inputs.
+Ansible settings are accepted only by the documented cluster create and manage
+tools. It does not expose the settings or secrets endpoints.
 
 ## Development
 
