@@ -10,6 +10,12 @@ import type {
   Operation,
   Project,
 } from "./schemas";
+import {
+  clusterCreateInputSchema,
+  environmentCreateInputSchema,
+  projectCreateInputSchema,
+  projectUpdateInputSchema,
+} from "./schemas";
 
 const API_SPEC_VERSION = "2.11.0";
 const pageInput = {
@@ -28,6 +34,9 @@ const operationSortBy = z
     /^-?(id|cluster_name|type|status|started|finished|cluster|environment)(,-?(id|cluster_name|type|status|started|finished|cluster|environment))*$/,
   )
   .optional();
+const writeConfirmation = z
+  .literal(true)
+  .describe("Set to true only after the user explicitly requests this write.");
 const sensitiveKeyPattern =
   /(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|credential|authorization|connection_info|extra_vars|inventory)/i;
 
@@ -76,6 +85,43 @@ function registerReadTool<TInputShape extends z.ZodRawShape>(
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => {
+      try {
+        return jsonResult(await run(input), apiToken);
+      } catch (error) {
+        if (error instanceof AutobaseApiError) {
+          return {
+            ...jsonResult({ error: error.message }, apiToken),
+            isError: true,
+          };
+        }
+        throw error;
+      }
+    },
+  );
+}
+
+function registerWriteTool<TInputShape extends z.ZodRawShape>(
+  server: McpServer,
+  apiToken: string,
+  name: string,
+  description: string,
+  inputSchema: z.ZodObject<TInputShape>,
+  options: { destructive: boolean; idempotent: boolean },
+  run: (input: z.infer<z.ZodObject<TInputShape>>) => Promise<unknown>,
+): void {
+  server.registerTool(
+    name,
+    {
+      description,
+      inputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: options.destructive,
+        idempotentHint: options.idempotent,
         openWorldHint: true,
       },
     },
@@ -429,5 +475,143 @@ export function registerTools(
         meta: paginationForTool(response.meta, page, response.data.length),
       };
     },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_create_project",
+    "Create an Autobase project. Requires an explicit user request and confirm: true.",
+    projectCreateInputSchema.extend({ confirm: writeConfirmation }),
+    { destructive: false, idempotent: false },
+    async ({ confirm: _confirm, ...input }) => {
+      void _confirm;
+      return projectForTool(await api.createProject(input));
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_update_project",
+    "Update an Autobase project's name or description. Requires an explicit user request and confirm: true.",
+    projectUpdateInputSchema.extend({
+      projectId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: false, idempotent: true },
+    async ({ projectId, confirm: _confirm, ...input }) => {
+      void _confirm;
+      if (input.name === undefined && input.description === undefined) {
+        throw new AutobaseApiError(
+          "Provide a project name or description to update.",
+        );
+      }
+      return projectForTool(await api.updateProject({ projectId, ...input }));
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_delete_project",
+    "Delete an Autobase project from Console metadata. This cannot be undone. Requires an explicit user request and confirm: true.",
+    z.object({
+      projectId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: false },
+    async ({ projectId }) => {
+      await api.deleteProject(projectId);
+      return { deleted: true, projectId };
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_create_environment",
+    "Create an Autobase environment. Requires an explicit user request and confirm: true.",
+    environmentCreateInputSchema.extend({ confirm: writeConfirmation }),
+    { destructive: false, idempotent: false },
+    async ({ confirm: _confirm, ...input }) => {
+      void _confirm;
+      return environmentForTool(await api.createEnvironment(input));
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_delete_environment",
+    "Delete an Autobase environment from Console metadata. This cannot be undone. Requires an explicit user request and confirm: true.",
+    z.object({
+      environmentId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: false },
+    async ({ environmentId }) => {
+      await api.deleteEnvironment(environmentId);
+      return { deleted: true, environmentId };
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_create_cluster",
+    "Create a cluster through Autobase Console. This may provision cloud infrastructure and incur charges. Secret values are not accepted, but secretId may reference a secret already configured in Console. Requires an explicit user request and confirm: true.",
+    clusterCreateInputSchema.extend({ confirm: writeConfirmation }),
+    { destructive: true, idempotent: false },
+    async ({ confirm: _confirm, ...input }) => {
+      void _confirm;
+      return api.createCluster(input);
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_delete_cluster",
+    "Delete a cluster record from Console metadata. This endpoint does not delete the running infrastructure. Verify this distinction before use. Requires an explicit user request and confirm: true.",
+    z.object({
+      clusterId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: false },
+    async ({ clusterId }) => {
+      await api.deleteCluster(clusterId);
+      return { deleted: true, clusterId };
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_delete_server",
+    "Delete a server record from Console metadata. The API does not describe this as deleting the running server. Requires an explicit user request and confirm: true.",
+    z.object({
+      serverId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: false },
+    async ({ serverId }) => {
+      await api.deleteServer(serverId);
+      return { deleted: true, serverId };
+    },
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_refresh_cluster",
+    "Refresh cluster information from the cluster's Patroni API. Requires an explicit user request and confirm: true.",
+    z.object({
+      clusterId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: false, idempotent: true },
+    async ({ clusterId }) =>
+      clusterForTool(await api.refreshCluster(clusterId)),
   );
 }

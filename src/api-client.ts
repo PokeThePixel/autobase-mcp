@@ -1,13 +1,18 @@
 import type { z } from "zod";
 import {
+  type clusterCreateInputSchema,
+  clusterCreateResponseSchema,
   clusterDefaultNameSchema,
   clusterSchema,
   deploymentSchema,
+  type environmentCreateInputSchema,
   environmentSchema,
   extensionSchema,
   listResponseSchema,
   operationSchema,
+  type projectCreateInputSchema,
   projectSchema,
+  type projectUpdateInputSchema,
   versionResponseListSchema,
   versionResponseSchema,
 } from "./schemas";
@@ -64,6 +69,11 @@ export type ExtensionFilters = PageOptions & {
   extensionType?: "all" | "contrib" | "third_party";
   postgresVersion?: string;
 };
+
+type ProjectCreateInput = z.infer<typeof projectCreateInputSchema>;
+type ProjectUpdateInput = z.infer<typeof projectUpdateInputSchema>;
+type EnvironmentCreateInput = z.infer<typeof environmentCreateInputSchema>;
+type ClusterCreateInput = z.infer<typeof clusterCreateInputSchema>;
 
 export class AutobaseApiClient {
   private readonly apiBaseUrl: URL;
@@ -123,6 +133,65 @@ export class AutobaseApiClient {
 
   getClusterDefaultName() {
     return this.get("clusters/default_name", clusterDefaultNameSchema);
+  }
+
+  createProject(input: ProjectCreateInput) {
+    return this.writeJson("POST", "projects", projectSchema, input);
+  }
+
+  updateProject(input: ProjectUpdateInput & { projectId: number }) {
+    const { projectId, ...body } = input;
+    return this.writeJson("PATCH", `projects/${projectId}`, projectSchema, {
+      name: body.name,
+      description: body.description,
+    });
+  }
+
+  deleteProject(projectId: number) {
+    return this.deleteResource(`projects/${projectId}`);
+  }
+
+  createEnvironment(input: EnvironmentCreateInput) {
+    return this.writeJson("POST", "environments", environmentSchema, input);
+  }
+
+  deleteEnvironment(environmentId: number) {
+    return this.deleteResource(`environments/${environmentId}`);
+  }
+
+  createCluster(input: ClusterCreateInput) {
+    const {
+      projectId,
+      environmentId,
+      secretId,
+      envs,
+      existingCluster,
+      ...body
+    } = input;
+    return this.writeJson("POST", "clusters", clusterCreateResponseSchema, {
+      ...body,
+      project_id: projectId,
+      environment_id: environmentId,
+      auth_info: secretId ? { secret_id: secretId } : undefined,
+      envs,
+      existing_cluster: existingCluster,
+    });
+  }
+
+  deleteCluster(clusterId: number) {
+    return this.deleteResource(`clusters/${clusterId}`);
+  }
+
+  deleteServer(serverId: number) {
+    return this.deleteResource(`servers/${serverId}`);
+  }
+
+  refreshCluster(clusterId: number) {
+    return this.writeJson(
+      "POST",
+      `clusters/${clusterId}/refresh`,
+      clusterSchema,
+    );
   }
 
   listOperations(filters: OperationFilters) {
@@ -250,5 +319,70 @@ export class AutobaseApiClient {
     }
 
     return parsed.data;
+  }
+
+  private async writeJson<TSchema extends z.ZodType>(
+    method: "POST" | "PATCH",
+    path: string,
+    schema: TSchema,
+    body?: unknown,
+  ): Promise<z.infer<TSchema>> {
+    const response = await this.writeRequest(method, path, body);
+    let responseBody: unknown;
+    try {
+      responseBody = await response.json();
+    } catch {
+      throw new AutobaseApiError("Autobase Console API returned invalid JSON.");
+    }
+
+    const parsed = schema.safeParse(responseBody);
+    if (!parsed.success) {
+      throw new AutobaseApiError(
+        `Autobase Console API returned an invalid response for ${path}.`,
+      );
+    }
+
+    return parsed.data;
+  }
+
+  private async deleteResource(path: string): Promise<void> {
+    const response = await this.writeRequest("DELETE", path);
+    if (response.status !== 204) {
+      throw new AutobaseApiError(
+        `Autobase Console API returned an unexpected success status for ${path}.`,
+      );
+    }
+  }
+
+  private async writeRequest(
+    method: "POST" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+  ): Promise<Response> {
+    const url = new URL(path, this.apiBaseUrl);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${this.apiToken}`,
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        redirect: "error",
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+      });
+    } catch {
+      throw new AutobaseApiError("Autobase Console API could not be reached.");
+    }
+
+    if (!response.ok) {
+      throw new AutobaseApiError(
+        `Autobase Console API returned HTTP ${response.status}.`,
+      );
+    }
+
+    return response;
   }
 }

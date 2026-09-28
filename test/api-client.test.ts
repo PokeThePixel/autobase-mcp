@@ -138,6 +138,142 @@ describe("AutobaseApiClient", () => {
     });
   });
 
+  test("creates a cluster using a secret reference without accepting secret values", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe("/api/v1/clusters");
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          name: "analytics",
+          project_id: 5,
+          environment_id: 2,
+          auth_info: { secret_id: 9 },
+          existing_cluster: false,
+        });
+        return Response.json({ cluster_id: 12, operation_id: 30 });
+      },
+    });
+
+    await expect(
+      client.createCluster({
+        name: "analytics",
+        projectId: 5,
+        environmentId: 2,
+        secretId: 9,
+        existingCluster: false,
+      }),
+    ).resolves.toEqual({ cluster_id: 12, operation_id: 30 });
+  });
+
+  test("maps project updates and validates the returned project", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe("/api/v1/projects/5");
+        expect(init?.method).toBe("PATCH");
+        expect(JSON.parse(String(init?.body))).toEqual({ name: "analytics" });
+        return Response.json({ id: 5, name: "analytics" });
+      },
+    });
+
+    await expect(
+      client.updateProject({ projectId: 5, name: "analytics" }),
+    ).resolves.toMatchObject({ id: 5, name: "analytics" });
+  });
+
+  test("creates projects and environments with POST", async () => {
+    const requests: string[] = [];
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        requests.push(`${init?.method} ${path}`);
+        if (path.endsWith("/projects")) {
+          expect(JSON.parse(String(init?.body))).toEqual({
+            name: "analytics",
+            description: "Analytics workloads",
+          });
+          return Response.json({
+            id: 8,
+            name: "analytics",
+            description: "Analytics workloads",
+          });
+        }
+
+        expect(JSON.parse(String(init?.body))).toEqual({
+          name: "production",
+          description: "Production workloads",
+        });
+        return Response.json({
+          id: 3,
+          name: "production",
+          description: "Production workloads",
+        });
+      },
+    });
+
+    await client.createProject({
+      name: "analytics",
+      description: "Analytics workloads",
+    });
+    await client.createEnvironment({
+      name: "production",
+      description: "Production workloads",
+    });
+
+    expect(requests).toEqual([
+      "POST /api/v1/projects",
+      "POST /api/v1/environments",
+    ]);
+  });
+
+  test("uses DELETE and requires the contract's 204 response", async () => {
+    const requests: string[] = [];
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        requests.push(`${init?.method} ${new URL(String(input)).pathname}`);
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    await client.deleteProject(4);
+    await client.deleteEnvironment(3);
+    await client.deleteCluster(2);
+    await client.deleteServer(1);
+
+    expect(requests).toEqual([
+      "DELETE /api/v1/projects/4",
+      "DELETE /api/v1/environments/3",
+      "DELETE /api/v1/clusters/2",
+      "DELETE /api/v1/servers/1",
+    ]);
+  });
+
+  test("refreshes cluster data with POST and validates the result", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/clusters/12/refresh",
+        );
+        expect(init?.method).toBe("POST");
+        return Response.json({ id: 12, name: "analytics" });
+      },
+    });
+
+    await expect(client.refreshCluster(12)).resolves.toMatchObject({
+      id: 12,
+      name: "analytics",
+    });
+  });
+
   test("does not include API error response bodies in errors", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",

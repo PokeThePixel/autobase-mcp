@@ -110,6 +110,38 @@ export const clusterDefaultNameSchema = z
   .object({ name: z.string() })
   .passthrough();
 
+export const projectCreateInputSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export const projectUpdateInputSchema = z.strictObject({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+});
+
+export const environmentCreateInputSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export const clusterCreateInputSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  projectId: z.number().int().positive(),
+  environmentId: z.number().int().positive().optional(),
+  secretId: z.number().int().positive().optional(),
+  envs: z.array(z.string()).optional(),
+  existingCluster: z.boolean().optional(),
+});
+
+export const clusterCreateResponseSchema = z
+  .object({
+    cluster_id: z.number().int(),
+    operation_id: z.number().int(),
+  })
+  .passthrough();
+
 export const clusterServerSchema = z
   .object({
     id: z.number().int().optional(),

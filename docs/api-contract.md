@@ -15,7 +15,7 @@ older Console image.
 
 ## Exposed API operations
 
-The MCP client calls only these GET endpoints:
+The MCP client calls these read endpoints:
 
 - `GET /version`
 - `GET /external/deployments`
@@ -28,6 +28,18 @@ The MCP client calls only these GET endpoints:
 - `GET /operations/{id}/log`
 - `GET /postgres_versions`
 - `GET /database/extensions`
+
+The MCP client also exposes these write endpoints:
+
+- `POST /projects`
+- `PATCH /projects/{id}`
+- `DELETE /projects/{id}`
+- `POST /environments`
+- `DELETE /environments/{id}`
+- `POST /clusters`
+- `DELETE /clusters/{id}`
+- `DELETE /servers/{id}`
+- `POST /clusters/{id}/refresh`
 
 Every JSON response is parsed against a Zod schema. Tool results project API
 objects onto an explicit field allowlist. In particular, cluster results omit
@@ -49,4 +61,8 @@ instance-type, and volume fields onto an explicit allowlist. The nested raw
 cloud image configuration is not returned. The cluster default-name endpoint
 returns only the suggested name.
 
-No write, scaling, secret-management, or arbitrary REST operation is exposed.
+Write tools require `confirm: true`. Cluster and server delete calls remove
+records from the Console database and do not claim to delete running
+infrastructure. Cluster creation can provision cloud resources. It accepts a
+Console secret ID reference, not secret values, and does not accept arbitrary
+`extra_vars`. The `/settings` and `/secrets` endpoints remain unavailable.

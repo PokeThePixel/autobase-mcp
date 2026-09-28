@@ -1,9 +1,9 @@
 # Autobase MCP
 
-A local stdio MCP server for reading Autobase Console projects, clusters,
-operations, PostgreSQL versions, and extensions. It is designed to be forked
-and configured for any Autobase Console instance. It has no Isle of TAS
-configuration or defaults.
+A local stdio MCP server for managing Autobase Console projects, clusters, and
+environments, and for reading their status and supported deployment options.
+It is designed to be forked and configured for any Autobase Console instance.
+It has no Isle of TAS configuration or defaults.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ For an MCP client that supports stdio servers, configure:
 Replace the example values in your local client configuration. Do not commit
 real tokens or a `.env` file.
 
-## Read-only tools
+## Read tools
 
 - `autobase_get_api_version`
 - `autobase_list_deployments`
@@ -70,6 +70,26 @@ real tokens or a `.env` file.
 - `autobase_get_operation_log`
 - `autobase_list_postgres_versions`
 - `autobase_list_extensions`
+
+## Write tools
+
+- `autobase_create_project`
+- `autobase_update_project`
+- `autobase_delete_project`
+- `autobase_create_environment`
+- `autobase_delete_environment`
+- `autobase_create_cluster`
+- `autobase_delete_cluster`
+- `autobase_delete_server`
+- `autobase_refresh_cluster`
+
+Every write tool requires `confirm: true` and should run only after the user
+requests that specific change. Cluster creation may provision cloud resources
+and incur charges. It accepts a reference to an existing Console secret, never
+secret values. Arbitrary `extra_vars` are not accepted. The API's settings and
+secrets endpoints are not exposed.
+Cluster and server deletion remove Console database records, not the running
+infrastructure.
 
 List tools accept a maximum page size of 100 and return `meta.hasMore` and
 `meta.nextOffset` so callers can request the next page without fetching an
@@ -89,8 +109,8 @@ capped at 20,000 characters and redact common credential fields and the API
 token. This redaction is a safety measure, not a guarantee that every custom
 secret format can be detected.
 
-The server exposes no write tools, arbitrary HTTP requests, SQL, shell, Docker,
-or Ansible inputs. It does not create or delete clusters.
+The server exposes no arbitrary HTTP requests, SQL, shell, Docker, or Ansible
+inputs. It does not expose settings or secrets endpoints.
 
 ## Development
 

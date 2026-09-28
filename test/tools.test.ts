@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { clusterSchema, deploymentSchema } from "../src/schemas";
+import {
+  clusterCreateInputSchema,
+  clusterSchema,
+  deploymentSchema,
+} from "../src/schemas";
 import {
   clusterForTool,
   deploymentForTool,
@@ -118,5 +122,18 @@ describe("deployment tool projection", () => {
     });
     expect(encoded).not.toContain("server_image");
     expect(encoded).not.toContain("internal-image-id");
+  });
+});
+
+describe("cluster creation input", () => {
+  test("rejects arbitrary Ansible variables and secret values", () => {
+    const parsed = clusterCreateInputSchema.safeParse({
+      name: "analytics",
+      projectId: 5,
+      extraVars: { API_PASSWORD: "do-not-send" },
+      secretValue: "do-not-send",
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });
