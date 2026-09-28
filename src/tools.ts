@@ -123,19 +123,27 @@ function operationForTool(operation: Operation) {
   };
 }
 
-function paginationForTool(
+export function paginationForTool(
   meta:
     | { count?: number | null; limit?: number | null; offset?: number | null }
     | undefined,
+  requestedPage: { limit?: number; offset?: number },
+  returnedCount: number,
 ) {
-  if (!meta) {
-    return undefined;
-  }
+  const offset = meta?.offset ?? requestedPage.offset ?? 0;
+  const limit = meta?.limit ?? requestedPage.limit ?? null;
+  const count = meta?.count ?? null;
+  const hasMore =
+    count !== null
+      ? offset + returnedCount < count
+      : limit !== null && returnedCount >= limit;
 
   return {
-    count: meta.count,
-    limit: meta.limit,
-    offset: meta.offset,
+    count,
+    limit,
+    offset,
+    hasMore,
+    nextOffset: hasMore ? offset + returnedCount : null,
   };
 }
 
@@ -166,7 +174,7 @@ export function registerTools(
       const response = await api.listProjects(input);
       return {
         data: response.data.map(projectForTool),
-        meta: paginationForTool(response.meta),
+        meta: paginationForTool(response.meta, input, response.data.length),
       };
     },
   );
@@ -184,7 +192,7 @@ export function registerTools(
       const response = await api.listClusters(projectId, page);
       return {
         data: response.data.map(clusterForTool),
-        meta: paginationForTool(response.meta),
+        meta: paginationForTool(response.meta, page, response.data.length),
       };
     },
   );
@@ -222,7 +230,7 @@ export function registerTools(
       });
       return {
         data: response.data.map(operationForTool),
-        meta: paginationForTool(response.meta),
+        meta: paginationForTool(response.meta, filters, response.data.length),
       };
     },
   );
@@ -285,7 +293,7 @@ export function registerTools(
           postgresMaxVersion: extension.postgres_max_version,
           contrib: extension.contrib,
         })),
-        meta: paginationForTool(response.meta),
+        meta: paginationForTool(response.meta, page, response.data.length),
       };
     },
   );

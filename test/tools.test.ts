@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { clusterSchema } from "../src/schemas";
-import { clusterForTool } from "../src/tools";
+import { clusterForTool, paginationForTool } from "../src/tools";
 
 describe("cluster tool projection", () => {
   test("omits connection details, Ansible variables, and inventory", () => {
@@ -25,5 +25,43 @@ describe("cluster tool projection", () => {
     expect(encoded).not.toContain("extra_vars");
     expect(encoded).not.toContain("inventory");
     expect(encoded).not.toContain("do-not-return");
+  });
+});
+
+describe("pagination tool metadata", () => {
+  test("provides the next offset when the count shows more results", () => {
+    expect(
+      paginationForTool(
+        { count: 45, limit: 20, offset: 20 },
+        { limit: 20, offset: 20 },
+        20,
+      ),
+    ).toEqual({
+      count: 45,
+      limit: 20,
+      offset: 20,
+      hasMore: true,
+      nextOffset: 40,
+    });
+  });
+
+  test("uses the requested page size when the API omits pagination metadata", () => {
+    expect(paginationForTool(undefined, { limit: 20, offset: 40 }, 5)).toEqual({
+      count: null,
+      limit: 20,
+      offset: 40,
+      hasMore: false,
+      nextOffset: null,
+    });
+  });
+
+  test("does not claim another page when the count has been reached", () => {
+    expect(
+      paginationForTool(
+        { count: 40, limit: 20, offset: 20 },
+        { limit: 20, offset: 20 },
+        20,
+      ),
+    ).toMatchObject({ hasMore: false, nextOffset: null });
   });
 });

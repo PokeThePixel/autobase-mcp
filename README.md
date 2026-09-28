@@ -68,7 +68,12 @@ real tokens or a `.env` file.
 - `autobase_list_postgres_versions`
 - `autobase_list_extensions`
 
-List tools accept a maximum page size of 100. Cluster responses omit
+List tools accept a maximum page size of 100 and return `meta.hasMore` and
+`meta.nextOffset` so callers can request the next page without fetching an
+unbounded result set. When the API omits its total count, `hasMore` is inferred
+from whether the returned page fills the requested page size.
+
+Cluster responses omit
 `connection_info`, Ansible `extra_vars`, and inventory. Operation logs are
 capped at 20,000 characters and redact common credential fields and the API
 token. This redaction is a safety measure, not a guarantee that every custom

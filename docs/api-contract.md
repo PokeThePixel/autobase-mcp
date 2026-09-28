@@ -30,4 +30,9 @@ Every JSON response is parsed against a Zod schema. Tool results project API
 objects onto an explicit field allowlist. In particular, cluster results omit
 `connection_info`, `extra_vars`, and `inventory`.
 
+List tools accept `limit` and `offset` and return `meta.hasMore` and
+`meta.nextOffset`. When the API supplies a total count, the server uses it to
+determine whether another page exists. Otherwise, it treats a full page as an
+indication that another page may be available. Each tool call fetches one page.
+
 No write, scaling, secret-management, or arbitrary REST operation is exposed.
