@@ -1,13 +1,16 @@
 export type AutobaseConfig = {
   apiBaseUrl: string;
   apiToken: string;
+  enableWriteTools: boolean;
 };
 
 export function loadConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
+  args: readonly string[] = [],
 ): AutobaseConfig {
   const rawBaseUrl = env.AUTOBASE_API_BASE_URL?.trim();
   const apiToken = env.AUTOBASE_API_TOKEN?.trim();
+  const writeToolsSetting = env.AUTOBASE_ENABLE_WRITE_TOOLS?.trim();
 
   if (!rawBaseUrl) {
     throw new Error("AUTOBASE_API_BASE_URL is required.");
@@ -15,6 +18,17 @@ export function loadConfig(
   if (!apiToken) {
     throw new Error("AUTOBASE_API_TOKEN is required.");
   }
+  if (
+    writeToolsSetting !== undefined &&
+    writeToolsSetting !== "" &&
+    writeToolsSetting !== "true" &&
+    writeToolsSetting !== "false"
+  ) {
+    throw new Error(
+      "AUTOBASE_ENABLE_WRITE_TOOLS must be exactly true or false.",
+    );
+  }
+  const writeToolsArgument = parseWriteToolsArgument(args);
 
   let baseUrl: URL;
   try {
@@ -55,5 +69,38 @@ export function loadConfig(
   return {
     apiBaseUrl: baseUrl.toString(),
     apiToken,
+    enableWriteTools: writeToolsArgument ?? writeToolsSetting === "true",
   };
+}
+
+function parseWriteToolsArgument(args: readonly string[]): boolean | undefined {
+  let value: boolean | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === undefined) {
+      continue;
+    }
+
+    let setting: string | undefined;
+    if (argument === "--enable-write-tools") {
+      index += 1;
+      setting = args[index];
+    } else if (argument.startsWith("--enable-write-tools=")) {
+      setting = argument.slice("--enable-write-tools=".length);
+    } else {
+      throw new Error(`Unknown argument: ${argument}`);
+    }
+
+    if (setting !== "true" && setting !== "false") {
+      throw new Error("--enable-write-tools requires exactly true or false.");
+    }
+    if (value !== undefined) {
+      throw new Error("--enable-write-tools may be specified only once.");
+    }
+
+    value = setting === "true";
+  }
+
+  return value;
 }

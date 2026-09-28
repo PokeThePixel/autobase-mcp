@@ -5,14 +5,14 @@ import { loadConfig } from "./config";
 import { registerTools } from "./tools";
 
 async function start(): Promise<void> {
-  const config = loadConfig();
+  const config = loadConfig(process.env, process.argv.slice(2));
   const api = new AutobaseApiClient(config);
   const server = new McpServer({
     name: "autobase-mcp",
     version: "0.1.0",
   });
 
-  registerTools(server, api, config.apiToken);
+  registerTools(server, api, config.apiToken, config.enableWriteTools);
   await server.connect(new StdioServerTransport());
 }
 

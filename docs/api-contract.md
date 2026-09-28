@@ -66,3 +66,7 @@ records from the Console database and do not claim to delete running
 infrastructure. Cluster creation can provision cloud resources. It accepts a
 Console secret ID reference, not secret values, and does not accept arbitrary
 `extra_vars`. The `/settings` and `/secrets` endpoints remain unavailable.
+Write tools are not registered unless the operator sets
+`AUTOBASE_ENABLE_WRITE_TOOLS=true` or passes
+`--enable-write-tools=true` as a command argument. The argument overrides the
+environment variable. Leaving both unset keeps the server read-only.

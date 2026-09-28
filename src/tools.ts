@@ -281,6 +281,7 @@ export function registerTools(
   server: McpServer,
   api: AutobaseApiClient,
   apiToken: string,
+  enableWriteTools = false,
 ): void {
   registerReadTool(
     server,
@@ -476,6 +477,10 @@ export function registerTools(
       };
     },
   );
+
+  if (!enableWriteTools) {
+    return;
+  }
 
   registerWriteTool(
     server,

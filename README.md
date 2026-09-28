@@ -33,6 +33,11 @@ Set these environment variables in your MCP client configuration:
 | --- | --- |
 | `AUTOBASE_API_BASE_URL` | Console origin, for example `https://console.example.com`. The client adds `/api/v1`. |
 | `AUTOBASE_API_TOKEN` | Console API bearer token. Keep it in the MCP client's secret or environment configuration, not in this repository. |
+| `AUTOBASE_ENABLE_WRITE_TOOLS` | Set to exactly `true` to register write tools. Omit it or set it to `false` to keep the server read-only. |
+
+You can also set the write-tool switch in the server's command arguments with
+`--enable-write-tools=true` or `--enable-write-tools=false`. The argument
+overrides `AUTOBASE_ENABLE_WRITE_TOOLS`.
 
 The server rejects remote HTTP URLs and URLs containing credentials, query
 parameters, or fragments. It does not print the token or raw API error bodies.
@@ -44,7 +49,11 @@ For an MCP client that supports stdio servers, configure:
   "mcpServers": {
     "autobase": {
       "command": "bun",
-      "args": ["run", "/absolute/path/to/autobase-mcp/src/index.ts"],
+      "args": [
+        "run",
+        "/absolute/path/to/autobase-mcp/src/index.ts",
+        "--enable-write-tools=false"
+      ],
       "env": {
         "AUTOBASE_API_BASE_URL": "https://console.example.com",
         "AUTOBASE_API_TOKEN": "set-this-in-your-client"
@@ -83,8 +92,11 @@ real tokens or a `.env` file.
 - `autobase_delete_server`
 - `autobase_refresh_cluster`
 
-Every write tool requires `confirm: true` and should run only after the user
-requests that specific change. Cluster creation may provision cloud resources
+Write tools are disabled by default. Set `AUTOBASE_ENABLE_WRITE_TOOLS=true`
+in the MCP client environment or add `--enable-write-tools=true` to the
+command arguments to register them. Every write tool also requires
+`confirm: true` and should run only after the user requests that specific
+change. Cluster creation may provision cloud resources
 and incur charges. It accepts a reference to an existing Console secret, never
 secret values. Arbitrary `extra_vars` are not accepted. The API's settings and
 secrets endpoints are not exposed.
