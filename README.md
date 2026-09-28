@@ -110,8 +110,7 @@ Fill in the form:
    ```json
    {
      "AUTOBASE_API_BASE_URL": "https://console.example.com",
-     "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here",
-     "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
+     "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here"
    }
    ```
 
@@ -143,8 +142,7 @@ replacing the sample script path and credentials:
       ],
       "env": {
         "AUTOBASE_API_BASE_URL": "https://console.example.com",
-        "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here",
-        "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
+        "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here"
       }
     }
   }
@@ -179,10 +177,16 @@ bun run format:check
 
 ## Before enabling write tools
 
-Keep write tools off until read-only calls work. To enable them, edit the
-`autobase` server with `/mcp edit autobase` and change the argument
-`--enable-write-tools=false` to `--enable-write-tools=true`. You can also change
-`AUTOBASE_ENABLE_WRITE_TOOLS` to `"true"`. Save the configuration.
+The setup above uses the command argument to keep write tools off. You can
+control this with either the command argument or the environment variable, but
+you do not need both. The command argument takes precedence if both are set.
+To enable writes, edit `autobase` with `/mcp edit autobase` and change
+`--enable-write-tools=false` to `--enable-write-tools=true`. Leave
+`AUTOBASE_ENABLE_WRITE_TOOLS` unset.
+
+Alternatively, remove `--enable-write-tools=false` from the command and set
+`AUTOBASE_ENABLE_WRITE_TOOLS` to `"true"` in the environment variables. Save
+the configuration. Keep write tools off until read-only calls work.
 
 Write tools can create cloud resources and incur charges, change cluster
 configuration, or delete Console records. Every write tool requires
@@ -225,9 +229,8 @@ HTTP requests, SQL, shell, or Docker.
   reports 1.4 or later.
 - **The Console rejects the request:** check the Console address and API token
   with your Console operator. Use HTTPS for a remote Console.
-- **Write tools are missing:** check that both the command argument and
-  environment setting do not set write tools to `false`. The command argument
-  overrides the environment setting.
+- **Write tools are missing:** check the command argument first. It overrides
+  `AUTOBASE_ENABLE_WRITE_TOOLS` when both are set.
 - **A tool returns an API version mismatch:** compare the deployed version
   from `autobase_get_api_version` with the version noted in
   [`docs/api-contract.md`](docs/api-contract.md).
