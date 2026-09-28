@@ -1,163 +1,213 @@
 # Autobase MCP
 
-A local stdio MCP server for managing Autobase Console projects, clusters, and
-environments, and for reading their status and supported deployment options.
-It is designed to be forked and configured for any Autobase Console instance.
-It has no Isle of TAS configuration or defaults.
+This MCP server connects GitHub Copilot to an Autobase Console. Copilot can
+read cluster status, inspect PostgreSQL settings and backups, and run
+documented cluster-management operations.
 
-## Requirements
+Start with read-only access. The server hides write tools unless you turn them
+on, and each write or remote cluster action also requires `confirm: true`.
 
-- Bun 1.4 or later
-- Autobase Console API access
-- A Console API token configured by the Console operator
-- HTTPS for remote API connections. Plain HTTP is accepted only for loopback
-  addresses such as `localhost`
+## Get started with GitHub Copilot
 
-This MCP server currently uses the Autobase Console Swagger contract version
-2.11.0. The deployed API version is available through the
-`autobase_get_api_version` tool. Check that version before relying on results
-from a different Console release. The pinned Swagger revision and endpoint
-list are in [`docs/api-contract.md`](docs/api-contract.md).
+These steps are for GitHub Copilot CLI, including the Copilot CLI experience
+in the GitHub Copilot app. GitHub's [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers)
+has details for other setup methods. You need a Console API token from your
+Autobase Console operator. This is not a GitHub token.
 
-## Configure
+### 1. Install Bun
 
-Clone or fork this repository, then install dependencies:
+On Windows, open PowerShell and run Bun's official installer:
 
-```sh
+```powershell
+powershell -c "irm https://bun.sh/install.ps1 | iex"
+```
+
+Close and reopen PowerShell, then check the installation:
+
+```powershell
+bun --version
+```
+
+The server needs Bun 1.4 or later. See the [Bun installation guide](https://bun.sh/docs/installation)
+for macOS, Linux, or other installation options.
+
+### 2. Download and prepare this project
+
+If `git` is not recognized in PowerShell, install
+[Git for Windows](https://git-scm.com/download/win) first.
+
+In PowerShell, run:
+
+```powershell
+git clone https://github.com/PokeThePixel/autobase-mcp.git
+cd autobase-mcp
 bun install
 ```
 
-Set these environment variables in your MCP client configuration:
+Keep this folder on your computer. Copilot needs its full path to start the
+server. To print that path, run:
 
-| Variable | Description |
-| --- | --- |
-| `AUTOBASE_API_BASE_URL` | Console origin, for example `https://console.example.com`. The client adds `/api/v1`. |
-| `AUTOBASE_API_TOKEN` | Console API bearer token. Keep it in the MCP client's secret or environment configuration, not in this repository. |
-| `AUTOBASE_ENABLE_WRITE_TOOLS` | Set to exactly `true` to register write tools. Omit it or set it to `false` to keep the server read-only. |
+```powershell
+(Resolve-Path .\src\index.ts).Path
+```
 
-You can also set the write-tool switch in the server's command arguments with
-`--enable-write-tools=true` or `--enable-write-tools=false`. The argument
-overrides `AUTOBASE_ENABLE_WRITE_TOOLS`.
+Copy the path shown. You will use it in the next step.
 
-The server rejects remote HTTP URLs and URLs containing credentials, query
-parameters, or fragments. It does not print the token or raw API error bodies.
+### 3. Get your Autobase Console details
 
-For an MCP client that supports stdio servers, configure:
+Ask your Console operator for:
+
+- The Console address, such as `https://console.example.com`
+- A Console API token with access to the projects and clusters you need
+
+Use the Console's origin as the address. Do not add `/api/v1`. The server adds
+that path itself. Remote Console connections must use HTTPS.
+
+### 4. Add Autobase in Copilot
+
+Open the GitHub Copilot CLI experience and enter:
+
+```text
+/mcp add
+```
+
+Fill in the form:
+
+1. **Server name:** `autobase`
+2. **Server type:** `STDIO`
+3. **Command:** Enter this, replacing the example path with the path you
+   copied in step 2:
+
+   ```text
+   bun run "C:\path\to\autobase-mcp\src\index.ts" --enable-write-tools=false
+   ```
+
+   Keep the quotation marks around the path if it contains spaces.
+4. **Environment variables:**
+
+   ```json
+   {
+     "AUTOBASE_API_BASE_URL": "https://console.example.com",
+     "AUTOBASE_API_TOKEN": "paste-your-console-token-here",
+     "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
+   }
+   ```
+
+Replace the example Console address, token, and script path with your values.
+Press **Ctrl+S** to save. Copilot CLI starts the MCP server and lists its tools.
+
+Copilot saves the token in your local MCP configuration, which may be plain
+text. Use a dedicated Console token. Do not paste it into chat, commit it to
+Git, or put it in this repository.
+
+If `/mcp add` is not available, edit the user configuration file at
+`%USERPROFILE%\.copilot\mcp-config.json`. Add this entry under `mcpServers`,
+replacing the sample script path and credentials:
 
 ```json
 {
   "mcpServers": {
     "autobase": {
+      "type": "stdio",
       "command": "bun",
       "args": [
         "run",
-        "/absolute/path/to/autobase-mcp/src/index.ts",
+        "C:\\path\\to\\autobase-mcp\\src\\index.ts",
         "--enable-write-tools=false"
       ],
       "env": {
         "AUTOBASE_API_BASE_URL": "https://console.example.com",
-        "AUTOBASE_API_TOKEN": "set-this-in-your-client"
+        "AUTOBASE_API_TOKEN": "paste-your-console-token-here",
+        "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
       }
     }
   }
 }
 ```
 
-Replace the example values in your local client configuration. Do not commit
-real tokens or a `.env` file.
+### 5. Check that Copilot can reach Autobase
 
-## Read tools
+In Copilot CLI, check the server:
 
-- `autobase_get_api_version`
-- `autobase_list_deployments`
-- `autobase_list_projects`
-- `autobase_list_environments`
-- `autobase_list_clusters`
-- `autobase_get_cluster_default_name`
-- `autobase_get_cluster`
-- `autobase_list_operations`
-- `autobase_get_operation`
-- `autobase_get_operation_log`
-- `autobase_list_postgres_versions`
-- `autobase_list_postgres_parameters`
-- `autobase_list_extensions`
+```text
+/mcp show autobase
+```
 
-## Write and cluster-action tools
+Then ask Copilot:
 
-- `autobase_create_project`
-- `autobase_update_project`
-- `autobase_delete_project`
-- `autobase_create_environment`
-- `autobase_delete_environment`
-- `autobase_create_cluster`
-- `autobase_delete_cluster`
-- `autobase_delete_server`
-- `autobase_refresh_cluster`
-- `autobase_manage_cluster`
-- `autobase_update_cluster_access`
-- `autobase_list_cluster_backups`
+> Use `autobase_get_api_version` to check the Console connection. Then use
+> `autobase_list_projects` with a limit of 5 and show each project's name and ID.
 
-Write tools are disabled by default. Set `AUTOBASE_ENABLE_WRITE_TOOLS=true`
-in the MCP client environment or add `--enable-write-tools=true` to the
-command arguments to register them. Every write tool also requires
-`confirm: true` and should run only after the user requests that specific
-change. Cluster creation may provision cloud resources and incur charges. It
-accepts deployment settings through `extraVars` and `envs`, plus a reference to
-an existing Console secret. Do not put credentials in those values because
-they are sent to Autobase. The API's settings and secrets endpoints are not
-exposed.
-Cluster and server deletion remove Console database records, not the running
-infrastructure.
+Copilot should call those tools and return the results. The version tool also
+shows the API contract version this server was built against. Check it before
+using the tools with a Console release you have not tested.
 
-`autobase_manage_cluster` runs maintenance against an existing cluster. It
-accepts the Console's documented playbook, tags, inventory, environment
-variables, and Ansible variables, plus references to existing cloud and server
-secrets. `extraVars` persist after a successful run. `runtimeExtraVars` apply
-only to that run. These inputs can change cluster configuration or topology,
-so the tool requires the same explicit write-tool opt-in and confirmation.
-The tool returns an operation ID that can be passed to
-`autobase_get_operation_log` to inspect the run.
+You can run local checks without a live Console token:
 
-`autobase_update_cluster_access` validates and stores references to secrets
-that already exist in Console. It never accepts secret contents.
-`autobase_list_cluster_backups` runs a remote backup-list playbook. It requires
-write tools to be enabled and an explicit confirmation because it starts an
-Ansible task.
-
-List tools accept a maximum page size of 100 and return `meta.hasMore` and
-`meta.nextOffset` so callers can request the next page without fetching an
-unbounded result set. When the API omits its total count, `hasMore` is inferred
-from whether the returned page fills the requested page size.
-
-Cluster listing supports the Console's name, status, location, environment,
-server-count, PostgreSQL-version, creation-date, and sort filters. Operation
-listing also supports the Console's documented sort fields.
-
-PostgreSQL parameter lookup can use a cluster ID or major version. It hides
-values for credential, connection, command, and key parameters.
-
-Deployment results include Console-supported regions, datacenters, instance
-types, and volume options. Raw cloud image configuration is omitted.
-
-Cluster responses omit
-`connection_info`, Ansible `extra_vars`, and inventory. Operation logs are
-capped at 20,000 characters and redact common credential fields and the API
-token. This redaction is a safety measure, not a guarantee that every custom
-secret format can be detected.
-
-The server exposes no arbitrary HTTP requests, SQL, shell, or Docker inputs.
-Ansible settings are accepted only by the documented cluster create and manage
-tools. It does not expose the settings or secrets endpoints.
-
-## Development
-
-```sh
+```powershell
 bun run check
-bun run test
+bun test
 bun run lint
 bun run format:check
 ```
 
-GitHub Actions runs these checks on Ubuntu and Windows for pushes and pull
-requests. The tests use mocked API responses and do not require a live Console
-token.
+## Before enabling write tools
+
+Keep write tools off until read-only calls work. To enable them, edit the
+`autobase` server with `/mcp edit autobase` and change the argument
+`--enable-write-tools=false` to `--enable-write-tools=true`. You can also change
+`AUTOBASE_ENABLE_WRITE_TOOLS` to `"true"`. Save the configuration.
+
+Write tools can create cloud resources and incur charges, change cluster
+configuration, or delete Console records. Every write tool requires
+`confirm: true`. Test writes only against a Console and cluster you are allowed
+to change. Cluster and server deletion remove Console records. They do not
+delete the running infrastructure. Backup listing also starts a remote
+Ansible task.
+
+Cluster configuration values are sent to Autobase. Use existing secret
+references for credentials. Do not put passwords or keys in `extraVars`,
+`runtimeExtraVars`, inventory, or environment values.
+
+## What Copilot can do
+
+Read tools inspect projects, environments, clusters, operations, deployments,
+PostgreSQL versions, parameters, and extensions. Cluster responses omit
+connection details, Ansible variables, and inventory. With write tools
+enabled, Copilot can also request backup records by running the Console's
+backup-list playbook.
+
+With write tools enabled, Copilot can create and update projects, create
+environments and clusters, manage existing clusters with the Console's
+documented playbooks, update stored cluster access references, refresh cluster
+status, and remove project, environment, cluster, or server records.
+
+`autobase_manage_cluster` returns an operation ID. Copilot can pass that ID to
+`autobase_get_operation` to check its status or `autobase_get_operation_log` to
+read the redacted, capped operation log.
+
+The server does not expose Autobase's settings or secrets endpoints, arbitrary
+HTTP requests, SQL, shell, or Docker.
+
+## Troubleshooting
+
+- **`bun` is not recognized:** close and reopen PowerShell after installing
+  Bun. If it still fails, see Bun's PATH instructions in its installation
+  guide.
+- **Copilot cannot start the server:** check that the `src\index.ts` path in
+  the MCP entry points to the file on your computer, and that `bun --version`
+  reports 1.4 or later.
+- **The Console rejects the request:** check the Console address and API token
+  with your Console operator. Use HTTPS for a remote Console.
+- **Write tools are missing:** check that both the command argument and
+  environment setting do not set write tools to `false`. The command argument
+  overrides the environment setting.
+- **A tool returns an API version mismatch:** compare the deployed version
+  from `autobase_get_api_version` with the version noted in
+  [`docs/api-contract.md`](docs/api-contract.md).
+
+## Development
+
+GitHub Actions runs type-checking, tests, lint, and formatting checks on
+Windows and Ubuntu for pushes and pull requests. The local tests use mocked
+API responses and do not need a live Console token.
