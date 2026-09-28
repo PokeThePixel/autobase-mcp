@@ -24,6 +24,16 @@ export const projectSchema = z
   })
   .passthrough();
 
+export const environmentSchema = z
+  .object({
+    id: z.number().int(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().nullable().optional(),
+  })
+  .passthrough();
+
 export const clusterServerSchema = z
   .object({
     id: z.number().int().optional(),
@@ -99,6 +109,7 @@ export const versionResponseListSchema = z
   .passthrough();
 
 export type Cluster = z.infer<typeof clusterSchema>;
+export type Environment = z.infer<typeof environmentSchema>;
 export type Operation = z.infer<typeof operationSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;

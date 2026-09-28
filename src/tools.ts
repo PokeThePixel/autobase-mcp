@@ -3,13 +3,25 @@ import { z } from "zod";
 import type { AutobaseApiClient } from "./api-client";
 import { AutobaseApiError } from "./api-client";
 import { redactOperationLog, redactText } from "./redaction";
-import type { Cluster, Operation, Project } from "./schemas";
+import type { Cluster, Environment, Operation, Project } from "./schemas";
 
 const API_SPEC_VERSION = "2.11.0";
 const pageInput = {
   limit: z.number().int().min(1).max(100).optional(),
   offset: z.number().int().min(0).optional(),
 };
+const clusterSortBy = z
+  .string()
+  .regex(
+    /^-?(id|name|created_at|updated_at|environment|project|status|location|server_count|postgres_version)(,-?(id|name|created_at|updated_at|environment|project|status|location|server_count|postgres_version))*$/,
+  )
+  .optional();
+const operationSortBy = z
+  .string()
+  .regex(
+    /^-?(id|cluster_name|type|status|started|finished|cluster|environment)(,-?(id|cluster_name|type|status|started|finished|cluster|environment))*$/,
+  )
+  .optional();
 const sensitiveKeyPattern =
   /(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|credential|authorization|connection_info|extra_vars|inventory)/i;
 
@@ -84,6 +96,16 @@ function projectForTool(project: Project) {
     description: project.description,
     createdAt: project.created_at,
     updatedAt: project.updated_at,
+  };
+}
+
+function environmentForTool(environment: Environment) {
+  return {
+    id: environment.id,
+    name: environment.name,
+    description: environment.description,
+    createdAt: environment.created_at,
+    updatedAt: environment.updated_at,
   };
 }
 
@@ -182,17 +204,41 @@ export function registerTools(
   registerReadTool(
     server,
     apiToken,
+    "autobase_list_environments",
+    "List Autobase environments.",
+    z.object(pageInput),
+    async (input) => {
+      const response = await api.listEnvironments(input);
+      return {
+        data: response.data.map(environmentForTool),
+        meta: paginationForTool(response.meta, input, response.data.length),
+      };
+    },
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
     "autobase_list_clusters",
     "List clusters for a project. Sensitive connection details, Ansible variables, and inventory are omitted.",
     z.object({
       projectId: z.number().int().positive(),
+      name: z.string().optional(),
+      status: z.string().optional(),
+      location: z.string().optional(),
+      environment: z.string().optional(),
+      serverCount: z.number().int().min(0).optional(),
+      postgresVersion: z.number().int().positive().optional(),
+      createdAtFrom: z.string().datetime({ offset: true }).optional(),
+      createdAtTo: z.string().datetime({ offset: true }).optional(),
+      sortBy: clusterSortBy,
       ...pageInput,
     }),
-    async ({ projectId, ...page }) => {
-      const response = await api.listClusters(projectId, page);
+    async ({ projectId, ...filters }) => {
+      const response = await api.listClusters(projectId, filters);
       return {
         data: response.data.map(clusterForTool),
-        meta: paginationForTool(response.meta, page, response.data.length),
+        meta: paginationForTool(response.meta, filters, response.data.length),
       };
     },
   );
@@ -219,6 +265,7 @@ export function registerTools(
       type: z.string().optional(),
       status: z.string().optional(),
       environment: z.string().optional(),
+      sortBy: operationSortBy,
       ...pageInput,
     }),
     async ({ projectId, startDate, endDate, ...filters }) => {

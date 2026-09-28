@@ -19,6 +19,7 @@ The MCP client calls only these GET endpoints:
 
 - `GET /version`
 - `GET /projects`
+- `GET /environments`
 - `GET /clusters`
 - `GET /clusters/{id}`
 - `GET /operations`
@@ -34,5 +35,11 @@ List tools accept `limit` and `offset` and return `meta.hasMore` and
 `meta.nextOffset`. When the API supplies a total count, the server uses it to
 determine whether another page exists. Otherwise, it treats a full page as an
 indication that another page may be available. Each tool call fetches one page.
+
+Cluster listing passes through the documented `name`, `status`, `location`,
+`environment`, `server_count`, `postgres_version`, `created_at_from`,
+`created_at_to`, and `sort_by` query parameters. Operation listing supports
+`sort_by` in addition to its project, date, and operation filters. Sort fields
+are restricted to the values listed in the pinned Swagger contract.
 
 No write, scaling, secret-management, or arbitrary REST operation is exposed.

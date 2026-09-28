@@ -47,6 +47,57 @@ describe("AutobaseApiClient", () => {
     ).resolves.toMatchObject({ data: [] });
   });
 
+  test("sends cluster discovery filters and sort order", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toBe("/api/v1/clusters");
+        expect(url.searchParams.get("project_id")).toBe("5");
+        expect(url.searchParams.get("status")).toBe("healthy");
+        expect(url.searchParams.get("server_count")).toBe("3");
+        expect(url.searchParams.get("created_at_from")).toBe(
+          "2026-09-01T00:00:00Z",
+        );
+        expect(url.searchParams.get("sort_by")).toBe("-created_at");
+        return Response.json({ data: [] });
+      },
+    });
+
+    await expect(
+      client.listClusters(5, {
+        status: "healthy",
+        serverCount: 3,
+        createdAtFrom: "2026-09-01T00:00:00Z",
+        sortBy: "-created_at",
+      }),
+    ).resolves.toMatchObject({ data: [] });
+  });
+
+  test("reads environment lists with pagination", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toBe("/api/v1/environments");
+        expect(url.searchParams.get("limit")).toBe("25");
+        return Response.json({
+          data: [{ id: 2, name: "production" }],
+          meta: { count: 1, limit: 25, offset: 0 },
+        });
+      },
+    });
+
+    await expect(client.listEnvironments({ limit: 25 })).resolves.toMatchObject(
+      {
+        data: [{ id: 2, name: "production" }],
+        meta: { count: 1, limit: 25, offset: 0 },
+      },
+    );
+  });
+
   test("does not include API error response bodies in errors", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",

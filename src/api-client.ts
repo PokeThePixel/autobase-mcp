@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import {
   clusterSchema,
+  environmentSchema,
   extensionSchema,
   listResponseSchema,
   operationSchema,
@@ -42,6 +43,19 @@ export type OperationFilters = PageOptions & {
   type?: string;
   status?: string;
   environment?: string;
+  sortBy?: string;
+};
+
+export type ClusterFilters = PageOptions & {
+  name?: string;
+  status?: string;
+  location?: string;
+  environment?: string;
+  serverCount?: number;
+  postgresVersion?: number;
+  createdAtFrom?: string;
+  createdAtTo?: string;
+  sortBy?: string;
 };
 
 export type ExtensionFilters = PageOptions & {
@@ -68,11 +82,29 @@ export class AutobaseApiClient {
     return this.get("projects", listResponseSchema(projectSchema), options);
   }
 
-  listClusters(projectId: number, options: PageOptions = {}) {
+  listClusters(projectId: number, filters: ClusterFilters = {}) {
     return this.get("clusters", listResponseSchema(clusterSchema), {
       project_id: projectId,
-      ...options,
+      name: filters.name,
+      status: filters.status,
+      location: filters.location,
+      environment: filters.environment,
+      server_count: filters.serverCount,
+      postgres_version: filters.postgresVersion,
+      created_at_from: filters.createdAtFrom,
+      created_at_to: filters.createdAtTo,
+      sort_by: filters.sortBy,
+      limit: filters.limit,
+      offset: filters.offset,
     });
+  }
+
+  listEnvironments(options: PageOptions = {}) {
+    return this.get(
+      "environments",
+      listResponseSchema(environmentSchema),
+      options,
+    );
   }
 
   getCluster(clusterId: number) {
@@ -88,6 +120,7 @@ export class AutobaseApiClient {
       type,
       status,
       environment,
+      sortBy,
       limit,
       offset,
     } = filters;
@@ -100,6 +133,7 @@ export class AutobaseApiClient {
       type,
       status,
       environment,
+      sort_by: sortBy,
       limit,
       offset,
     });

@@ -61,6 +61,7 @@ real tokens or a `.env` file.
 
 - `autobase_get_api_version`
 - `autobase_list_projects`
+- `autobase_list_environments`
 - `autobase_list_clusters`
 - `autobase_get_cluster`
 - `autobase_list_operations`
@@ -72,6 +73,10 @@ List tools accept a maximum page size of 100 and return `meta.hasMore` and
 `meta.nextOffset` so callers can request the next page without fetching an
 unbounded result set. When the API omits its total count, `hasMore` is inferred
 from whether the returned page fills the requested page size.
+
+Cluster listing supports the Console's name, status, location, environment,
+server-count, PostgreSQL-version, creation-date, and sort filters. Operation
+listing also supports the Console's documented sort fields.
 
 Cluster responses omit
 `connection_info`, Ansible `extra_vars`, and inventory. Operation logs are
