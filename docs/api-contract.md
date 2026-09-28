@@ -14,6 +14,11 @@ using other tools, and compare the returned service version with the Swagger
 version above. Do not assume that the latest Swagger on `main` matches an
 older Console image.
 
+The client sends `Authorization: Bearer <token>` using the Console deployment's
+`AUTH_TOKEN` or `PG_CONSOLE_AUTHORIZATION_TOKEN`. Set it in
+`AUTOBASE_API_AUTHORIZATION_TOKEN`. This credential is separate from cloud
+provider and SSH secrets stored for cluster access.
+
 The cluster management endpoint was added from the current Autobase API
 reference. It is not present in the pinned Swagger source revision above.
 The PostgreSQL parameter, backup-list, cluster-access, and single-operation

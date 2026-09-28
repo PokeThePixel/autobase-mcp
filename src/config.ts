@@ -9,14 +9,27 @@ export function loadConfig(
   args: readonly string[] = [],
 ): AutobaseConfig {
   const rawBaseUrl = env.AUTOBASE_API_BASE_URL?.trim();
-  const apiToken = env.AUTOBASE_API_TOKEN?.trim();
+  const authorizationToken = env.AUTOBASE_API_AUTHORIZATION_TOKEN?.trim();
+  const legacyApiToken = env.AUTOBASE_API_TOKEN?.trim();
   const writeToolsSetting = env.AUTOBASE_ENABLE_WRITE_TOOLS?.trim();
+  const apiToken = authorizationToken || legacyApiToken;
 
   if (!rawBaseUrl) {
     throw new Error("AUTOBASE_API_BASE_URL is required.");
   }
+  if (
+    authorizationToken &&
+    legacyApiToken &&
+    authorizationToken !== legacyApiToken
+  ) {
+    throw new Error(
+      "AUTOBASE_API_AUTHORIZATION_TOKEN and AUTOBASE_API_TOKEN must match when both are set.",
+    );
+  }
   if (!apiToken) {
-    throw new Error("AUTOBASE_API_TOKEN is required.");
+    throw new Error(
+      "AUTOBASE_API_AUTHORIZATION_TOKEN is required. Set it to the Console deployment's AUTH_TOKEN or PG_CONSOLE_AUTHORIZATION_TOKEN.",
+    );
   }
   if (
     writeToolsSetting !== undefined &&

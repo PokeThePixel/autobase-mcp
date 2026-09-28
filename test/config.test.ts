@@ -6,7 +6,28 @@ describe("loadConfig", () => {
     expect(() => loadConfig({})).toThrow("AUTOBASE_API_BASE_URL is required.");
     expect(() =>
       loadConfig({ AUTOBASE_API_BASE_URL: "https://console.example.com" }),
-    ).toThrow("AUTOBASE_API_TOKEN is required.");
+    ).toThrow("AUTOBASE_API_AUTHORIZATION_TOKEN is required.");
+  });
+
+  test("accepts the explicit Console authorization token setting", () => {
+    expect(
+      loadConfig({
+        AUTOBASE_API_BASE_URL: "https://console.example.com",
+        AUTOBASE_API_AUTHORIZATION_TOKEN: "raw-console-token",
+      }).apiToken,
+    ).toBe("raw-console-token");
+  });
+
+  test("rejects conflicting token setting names", () => {
+    expect(() =>
+      loadConfig({
+        AUTOBASE_API_BASE_URL: "https://console.example.com",
+        AUTOBASE_API_AUTHORIZATION_TOKEN: "token-one",
+        AUTOBASE_API_TOKEN: "token-two",
+      }),
+    ).toThrow(
+      "AUTOBASE_API_AUTHORIZATION_TOKEN and AUTOBASE_API_TOKEN must match when both are set.",
+    );
   });
 
   test("adds the API path to a secure Console origin", () => {

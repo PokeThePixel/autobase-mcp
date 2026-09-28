@@ -11,8 +11,7 @@ on, and each write or remote cluster action also requires `confirm: true`.
 
 These steps are for GitHub Copilot CLI, including the Copilot CLI experience
 in the GitHub Copilot app. GitHub's [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers)
-has details for other setup methods. You need a Console API token from your
-Autobase Console operator. This is not a GitHub token.
+has details for other setup methods.
 
 ### 1. Install Bun
 
@@ -53,15 +52,38 @@ server. To print that path, run:
 
 Copy the path shown. You will use it in the next step.
 
-### 3. Get your Autobase Console details
+### 3. Find the Console API authorization token
 
-Ask your Console operator for:
+The MCP needs the Console's existing API authorization token. It sends this
+value as a Bearer token in the `Authorization` header. It does not use your
+GitHub token, Console login password, or the password and SSH-key secrets you
+created for database servers.
 
-- The Console address, such as `https://console.example.com`
-- A Console API token with access to the projects and clusters you need
+Find the value where the Console was installed:
 
-Use the Console's origin as the address. Do not add `/api/v1`. The server adds
-that path itself. Remote Console connections must use HTTPS.
+- **Docker Compose:** open the Console deployment's `.env` file and look for
+  `AUTH_TOKEN`. In the standard source checkout, this file is in the `console`
+  folder beside `docker-compose.yml`. If the deployment uses the provided
+  Docker Secrets override, the host file is `console/secrets/auth_token`. See
+  Autobase's [Console deployment guide](https://github.com/autobase-tech/autobase/blob/a9233c04881aa0d72f9764c25ce2b60ef2862448/console/README.md).
+- **Single Docker container:** check the value supplied as
+  `PG_CONSOLE_AUTHORIZATION_TOKEN` when the container was started.
+- **Managed Console or no server access:** ask the Console operator to provide
+  the configured API authorization token. The Console UI does not show it.
+
+This is a deployment credential, so treat it as sensitive. Do not create a
+new password or SSH-key secret for this purpose. Copy the token value exactly,
+without adding the word `Bearer`.
+
+The named password and SSH-key secrets in Console are different. They give
+Autobase access to database servers during cluster operations. This MCP uses
+their IDs with `autobase_update_cluster_access`; it never uses their contents
+to log in to the Console. Get those IDs from the Console when you configure a
+cluster.
+
+Also note the Console address, such as `https://console.example.com`. Use only
+the origin. Do not add `/api/v1`, the server adds it. Remote Console
+connections must use HTTPS.
 
 ### 4. Add Autobase in Copilot
 
@@ -88,17 +110,21 @@ Fill in the form:
    ```json
    {
      "AUTOBASE_API_BASE_URL": "https://console.example.com",
-     "AUTOBASE_API_TOKEN": "paste-your-console-token-here",
+     "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here",
      "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
    }
    ```
 
-Replace the example Console address, token, and script path with your values.
+Replace the example Console address, raw `AUTH_TOKEN` value, and script path
+with your values. `AUTOBASE_API_AUTHORIZATION_TOKEN` is the MCP setting name.
+Its value comes from the Console deployment's `AUTH_TOKEN` or
+`PG_CONSOLE_AUTHORIZATION_TOKEN`. Existing configurations can continue to use
+`AUTOBASE_API_TOKEN`.
 Press **Ctrl+S** to save. Copilot CLI starts the MCP server and lists its tools.
 
-Copilot saves the token in your local MCP configuration, which may be plain
-text. Use a dedicated Console token. Do not paste it into chat, commit it to
-Git, or put it in this repository.
+Copilot saves this deployment credential in your local MCP configuration,
+which may be plain text. Do not paste it into chat, commit it to Git, or put
+it in this repository.
 
 If `/mcp add` is not available, edit the user configuration file at
 `%USERPROFILE%\.copilot\mcp-config.json`. Add this entry under `mcpServers`,
@@ -117,7 +143,7 @@ replacing the sample script path and credentials:
       ],
       "env": {
         "AUTOBASE_API_BASE_URL": "https://console.example.com",
-        "AUTOBASE_API_TOKEN": "paste-your-console-token-here",
+        "AUTOBASE_API_AUTHORIZATION_TOKEN": "paste-the-raw-AUTH_TOKEN-value-here",
         "AUTOBASE_ENABLE_WRITE_TOOLS": "false"
       }
     }
