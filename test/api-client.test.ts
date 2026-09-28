@@ -138,7 +138,7 @@ describe("AutobaseApiClient", () => {
     });
   });
 
-  test("creates a cluster using a secret reference without accepting secret values", async () => {
+  test("creates a cluster with provisioning variables and a stored secret reference", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",
       apiToken: "private-token",
@@ -151,6 +151,11 @@ describe("AutobaseApiClient", () => {
           environment_id: 2,
           auth_info: { secret_id: 9 },
           existing_cluster: false,
+          extra_vars: {
+            cloud_provider: "aws",
+            server_count: 3,
+            postgresql_version: 17,
+          },
         });
         return Response.json({ cluster_id: 12, operation_id: 30 });
       },
@@ -163,6 +168,11 @@ describe("AutobaseApiClient", () => {
         environmentId: 2,
         secretId: 9,
         existingCluster: false,
+        extraVars: {
+          cloud_provider: "aws",
+          server_count: 3,
+          postgresql_version: 17,
+        },
       }),
     ).resolves.toEqual({ cluster_id: 12, operation_id: 30 });
   });
@@ -272,6 +282,57 @@ describe("AutobaseApiClient", () => {
       id: 12,
       name: "analytics",
     });
+  });
+
+  test("manages an existing cluster with persistent and runtime configuration", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/clusters/12/manage",
+        );
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          auth_info: { cloud_secret_id: 8, server_secret_id: 9 },
+          playbook: "config_pgcluster.yml",
+          tags: "postgresql_users",
+          inventory: { all: { children: {} } },
+          envs: ["ANSIBLE_FORCE_COLOR=1"],
+          extra_vars: { postgresql_parameters: { work_mem: "64MB" } },
+          runtime_extra_vars: { maintenance_window: "planned" },
+          new_nodes: [
+            {
+              hostname: "db-2",
+              ip_address: "192.0.2.20",
+              ssh_port: 2222,
+              location: "dc-west",
+            },
+          ],
+        });
+        return Response.json({ cluster_id: 12, operation_id: 35 });
+      },
+    });
+
+    await expect(
+      client.manageCluster(12, {
+        authInfo: { cloudSecretId: 8, serverSecretId: 9 },
+        playbook: "config_pgcluster.yml",
+        tags: "postgresql_users",
+        inventory: { all: { children: {} } },
+        envs: ["ANSIBLE_FORCE_COLOR=1"],
+        extraVars: { postgresql_parameters: { work_mem: "64MB" } },
+        runtimeExtraVars: { maintenance_window: "planned" },
+        newNodes: [
+          {
+            hostname: "db-2",
+            ipAddress: "192.0.2.20",
+            sshPort: 2222,
+            location: "dc-west",
+          },
+        ],
+      }),
+    ).resolves.toEqual({ cluster_id: 12, operation_id: 35 });
   });
 
   test("does not include API error response bodies in errors", async () => {

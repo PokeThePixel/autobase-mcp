@@ -132,15 +132,39 @@ export const clusterCreateInputSchema = z.strictObject({
   environmentId: z.number().int().positive().optional(),
   secretId: z.number().int().positive().optional(),
   envs: z.array(z.string()).optional(),
+  extraVars: z.record(z.string(), z.unknown()).optional(),
   existingCluster: z.boolean().optional(),
 });
 
 export const clusterCreateResponseSchema = z
   .object({
     cluster_id: z.number().int(),
-    operation_id: z.number().int(),
+    operation_id: z.number().int().optional(),
   })
   .passthrough();
+
+const clusterManageNodeSchema = z.strictObject({
+  hostname: z.string().min(1),
+  ipAddress: z.string().min(1),
+  sshPort: z.number().int().min(1).max(65535).optional(),
+  location: z.string().optional(),
+});
+
+export const clusterManageInputSchema = z.strictObject({
+  authInfo: z
+    .strictObject({
+      cloudSecretId: z.number().int().positive().optional(),
+      serverSecretId: z.number().int().positive().optional(),
+    })
+    .optional(),
+  playbook: z.string().min(1).optional(),
+  tags: z.string().optional(),
+  inventory: z.record(z.string(), z.unknown()).optional(),
+  envs: z.array(z.string()).optional(),
+  extraVars: z.record(z.string(), z.unknown()).optional(),
+  runtimeExtraVars: z.record(z.string(), z.unknown()).optional(),
+  newNodes: z.array(clusterManageNodeSchema).min(1).optional(),
+});
 
 export const clusterServerSchema = z
   .object({

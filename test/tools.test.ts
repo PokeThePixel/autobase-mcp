@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   clusterCreateInputSchema,
+  clusterManageInputSchema,
   clusterSchema,
   deploymentSchema,
 } from "../src/schemas";
@@ -125,8 +126,8 @@ describe("deployment tool projection", () => {
   });
 });
 
-describe("cluster creation input", () => {
-  test("rejects arbitrary Ansible variables and secret values", () => {
+describe("cluster configuration input", () => {
+  test("accepts cluster settings and rejects unknown top-level secret fields", () => {
     const parsed = clusterCreateInputSchema.safeParse({
       name: "analytics",
       projectId: 5,
@@ -135,5 +136,37 @@ describe("cluster creation input", () => {
     });
 
     expect(parsed.success).toBe(false);
+    expect(
+      clusterCreateInputSchema.safeParse({
+        name: "analytics",
+        projectId: 5,
+        extraVars: { cloud_provider: "aws", server_count: 3 },
+      }).success,
+    ).toBe(true);
+  });
+
+  test("accepts documented maintenance settings and validates added nodes", () => {
+    const parsed = clusterManageInputSchema.safeParse({
+      authInfo: { serverSecretId: 9 },
+      playbook: "config_pgcluster.yml",
+      extraVars: { postgresql_parameters: { work_mem: "64MB" } },
+      runtimeExtraVars: { maintenance_window: "planned" },
+      newNodes: [{ hostname: "db-2", ipAddress: "192.0.2.20", sshPort: 2222 }],
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  test("rejects empty node additions and direct secret values", () => {
+    expect(
+      clusterManageInputSchema.safeParse({
+        newNodes: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      clusterManageInputSchema.safeParse({
+        authInfo: { serverPassword: "do-not-accept" },
+      }).success,
+    ).toBe(false);
   });
 });

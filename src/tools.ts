@@ -12,6 +12,7 @@ import type {
 } from "./schemas";
 import {
   clusterCreateInputSchema,
+  clusterManageInputSchema,
   environmentCreateInputSchema,
   projectCreateInputSchema,
   projectUpdateInputSchema,
@@ -565,12 +566,16 @@ export function registerTools(
     server,
     apiToken,
     "autobase_create_cluster",
-    "Create a cluster through Autobase Console. This may provision cloud infrastructure and incur charges. Secret values are not accepted, but secretId may reference a secret already configured in Console. Requires an explicit user request and confirm: true.",
+    "Create and provision a cluster through Autobase Console. This may incur cloud charges. Configure the deployment with extraVars and envs, and use secretId to reference a secret already stored in Console. Do not put credentials in extraVars or envs because they are sent to Autobase. Requires an explicit user request and confirm: true.",
     clusterCreateInputSchema.extend({ confirm: writeConfirmation }),
     { destructive: true, idempotent: false },
     async ({ confirm: _confirm, ...input }) => {
       void _confirm;
-      return api.createCluster(input);
+      const result = await api.createCluster(input);
+      return {
+        clusterId: result.cluster_id,
+        operationId: result.operation_id,
+      };
     },
   );
 
@@ -618,5 +623,25 @@ export function registerTools(
     { destructive: false, idempotent: true },
     async ({ clusterId }) =>
       clusterForTool(await api.refreshCluster(clusterId)),
+  );
+
+  registerWriteTool(
+    server,
+    apiToken,
+    "autobase_manage_cluster",
+    "Run a maintenance playbook against an existing cluster. Supports persistent extraVars, per-run runtimeExtraVars, inventory, tags, environment variables, existing cloud/server secret IDs, and adding new nodes. Persistent extraVars replace the saved values only after success. runtimeExtraVars are not saved. Use secret IDs for credentials. Do not put credentials in extraVars, runtimeExtraVars, inventory, or envs because they are sent to Autobase. This can change cluster configuration or topology. Requires an explicit user request and confirm: true.",
+    clusterManageInputSchema.extend({
+      clusterId: z.number().int().positive(),
+      confirm: writeConfirmation,
+    }),
+    { destructive: true, idempotent: false },
+    async ({ clusterId, confirm: _confirm, ...input }) => {
+      void _confirm;
+      const result = await api.manageCluster(clusterId, input);
+      return {
+        clusterId: result.cluster_id,
+        operationId: result.operation_id,
+      };
+    },
   );
 }

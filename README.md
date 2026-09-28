@@ -91,17 +91,28 @@ real tokens or a `.env` file.
 - `autobase_delete_cluster`
 - `autobase_delete_server`
 - `autobase_refresh_cluster`
+- `autobase_manage_cluster`
 
 Write tools are disabled by default. Set `AUTOBASE_ENABLE_WRITE_TOOLS=true`
 in the MCP client environment or add `--enable-write-tools=true` to the
 command arguments to register them. Every write tool also requires
 `confirm: true` and should run only after the user requests that specific
-change. Cluster creation may provision cloud resources
-and incur charges. It accepts a reference to an existing Console secret, never
-secret values. Arbitrary `extra_vars` are not accepted. The API's settings and
-secrets endpoints are not exposed.
+change. Cluster creation may provision cloud resources and incur charges. It
+accepts deployment settings through `extraVars` and `envs`, plus a reference to
+an existing Console secret. Do not put credentials in those values because
+they are sent to Autobase. The API's settings and secrets endpoints are not
+exposed.
 Cluster and server deletion remove Console database records, not the running
 infrastructure.
+
+`autobase_manage_cluster` runs maintenance against an existing cluster. It
+accepts the Console's documented playbook, tags, inventory, environment
+variables, and Ansible variables, plus references to existing cloud and server
+secrets. `extraVars` persist after a successful run. `runtimeExtraVars` apply
+only to that run. These inputs can change cluster configuration or topology,
+so the tool requires the same explicit write-tool opt-in and confirmation.
+The tool returns an operation ID that can be passed to
+`autobase_get_operation_log` to inspect the run.
 
 List tools accept a maximum page size of 100 and return `meta.hasMore` and
 `meta.nextOffset` so callers can request the next page without fetching an

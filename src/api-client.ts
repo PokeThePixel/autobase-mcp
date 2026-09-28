@@ -3,6 +3,7 @@ import {
   type clusterCreateInputSchema,
   clusterCreateResponseSchema,
   clusterDefaultNameSchema,
+  type clusterManageInputSchema,
   clusterSchema,
   deploymentSchema,
   type environmentCreateInputSchema,
@@ -74,6 +75,7 @@ type ProjectCreateInput = z.infer<typeof projectCreateInputSchema>;
 type ProjectUpdateInput = z.infer<typeof projectUpdateInputSchema>;
 type EnvironmentCreateInput = z.infer<typeof environmentCreateInputSchema>;
 type ClusterCreateInput = z.infer<typeof clusterCreateInputSchema>;
+type ClusterManageInput = z.infer<typeof clusterManageInputSchema>;
 
 export class AutobaseApiClient {
   private readonly apiBaseUrl: URL;
@@ -165,6 +167,7 @@ export class AutobaseApiClient {
       environmentId,
       secretId,
       envs,
+      extraVars,
       existingCluster,
       ...body
     } = input;
@@ -174,6 +177,7 @@ export class AutobaseApiClient {
       environment_id: environmentId,
       auth_info: secretId ? { secret_id: secretId } : undefined,
       envs,
+      extra_vars: extraVars,
       existing_cluster: existingCluster,
     });
   }
@@ -191,6 +195,32 @@ export class AutobaseApiClient {
       "POST",
       `clusters/${clusterId}/refresh`,
       clusterSchema,
+    );
+  }
+
+  manageCluster(clusterId: number, input: ClusterManageInput) {
+    const { authInfo, extraVars, runtimeExtraVars, newNodes, ...body } = input;
+    return this.writeJson(
+      "POST",
+      `clusters/${clusterId}/manage`,
+      clusterCreateResponseSchema,
+      {
+        ...body,
+        auth_info: authInfo
+          ? {
+              cloud_secret_id: authInfo.cloudSecretId,
+              server_secret_id: authInfo.serverSecretId,
+            }
+          : undefined,
+        extra_vars: extraVars,
+        runtime_extra_vars: runtimeExtraVars,
+        new_nodes: newNodes?.map((node) => ({
+          hostname: node.hostname,
+          ip_address: node.ipAddress,
+          ssh_port: node.sshPort,
+          location: node.location,
+        })),
+      },
     );
   }
 
