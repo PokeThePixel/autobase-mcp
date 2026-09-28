@@ -121,4 +121,6 @@ bun run lint
 bun run format:check
 ```
 
-The tests use mocked API responses and do not require a live Console token.
+GitHub Actions runs these checks on Ubuntu and Windows for pushes and pull
+requests. The tests use mocked API responses and do not require a live Console
+token.
