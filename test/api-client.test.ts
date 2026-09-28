@@ -1,0 +1,97 @@
+import { describe, expect, test } from "bun:test";
+import { AutobaseApiClient } from "../src/api-client";
+
+describe("AutobaseApiClient", () => {
+  test("sends the bearer token and validates project responses", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe("/api/v1/projects");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer private-token",
+        );
+        return Response.json({
+          data: [{ id: 3, name: "production" }],
+          meta: { count: 1, limit: 20, offset: 0 },
+        });
+      },
+    });
+
+    await expect(client.listProjects({ limit: 20 })).resolves.toMatchObject({
+      data: [{ id: 3, name: "production" }],
+      meta: { count: 1, limit: 20, offset: 0 },
+    });
+  });
+
+  test("sends the required project and date filters for operations", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toBe("/api/v1/operations");
+        expect(url.searchParams.get("project_id")).toBe("5");
+        expect(url.searchParams.get("start_date")).toBe("2026-09-01T00:00:00Z");
+        expect(url.searchParams.get("end_date")).toBe("2026-09-30T00:00:00Z");
+        return Response.json({ data: [] });
+      },
+    });
+
+    await expect(
+      client.listOperations({
+        projectId: 5,
+        startDate: "2026-09-01T00:00:00Z",
+        endDate: "2026-09-30T00:00:00Z",
+      }),
+    ).resolves.toMatchObject({ data: [] });
+  });
+
+  test("does not include API error response bodies in errors", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async () =>
+        Response.json(
+          { description: "Authorization: Bearer private-token" },
+          { status: 401 },
+        ),
+    });
+
+    await expect(client.getVersion()).rejects.toMatchObject({
+      message: "Autobase Console API returned HTTP 401.",
+    });
+  });
+
+  test("rejects malformed API responses without echoing response values", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async () => Response.json({ data: [{ id: "private-token" }] }),
+    });
+
+    await expect(client.listProjects()).rejects.toThrow(
+      "Autobase Console API returned an invalid response for projects.",
+    );
+  });
+
+  test("returns operation log completion metadata", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/operations/8/log",
+        );
+        return new Response("operation output", {
+          headers: { "x-log-completed": "true" },
+        });
+      },
+    });
+
+    await expect(client.getOperationLog(8)).resolves.toEqual({
+      log: "operation output",
+      completed: true,
+    });
+  });
+});
