@@ -60,9 +60,11 @@ real tokens or a `.env` file.
 ## Read-only tools
 
 - `autobase_get_api_version`
+- `autobase_list_deployments`
 - `autobase_list_projects`
 - `autobase_list_environments`
 - `autobase_list_clusters`
+- `autobase_get_cluster_default_name`
 - `autobase_get_cluster`
 - `autobase_list_operations`
 - `autobase_get_operation_log`
@@ -77,6 +79,9 @@ from whether the returned page fills the requested page size.
 Cluster listing supports the Console's name, status, location, environment,
 server-count, PostgreSQL-version, creation-date, and sort filters. Operation
 listing also supports the Console's documented sort fields.
+
+Deployment results include Console-supported regions, datacenters, instance
+types, and volume options. Raw cloud image configuration is omitted.
 
 Cluster responses omit
 `connection_info`, Ansible `extra_vars`, and inventory. Operation logs are

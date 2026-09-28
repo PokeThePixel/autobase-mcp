@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { clusterSchema } from "../src/schemas";
-import { clusterForTool, paginationForTool } from "../src/tools";
+import { clusterSchema, deploymentSchema } from "../src/schemas";
+import {
+  clusterForTool,
+  deploymentForTool,
+  paginationForTool,
+} from "../src/tools";
 
 describe("cluster tool projection", () => {
   test("omits connection details, Ansible variables, and inventory", () => {
@@ -63,5 +67,56 @@ describe("pagination tool metadata", () => {
         20,
       ),
     ).toMatchObject({ hasMore: false, nextOffset: null });
+  });
+});
+
+describe("deployment tool projection", () => {
+  test("returns deployment choices but omits raw cloud image configuration", () => {
+    const deployment = deploymentSchema.parse({
+      code: "aws",
+      description: "Amazon Web Services",
+      cloud_regions: [
+        {
+          code: "north_america",
+          name: "North America",
+          datacenters: [
+            {
+              code: "ca-central-1",
+              location: "Canada (central)",
+              cloud_image: {
+                image: { server_image: "internal-image-id" },
+                arch: "amd64",
+                os_name: "Ubuntu",
+                os_version: "22.04 LTS",
+              },
+            },
+          ],
+        },
+      ],
+      instance_types: {
+        small: [{ code: "m5.large", cpu: 2, ram: 8 }],
+      },
+    });
+
+    const result = deploymentForTool(deployment);
+    const encoded = JSON.stringify(result);
+
+    expect(result).toMatchObject({
+      code: "aws",
+      regions: [
+        {
+          code: "north_america",
+          datacenters: [
+            {
+              code: "ca-central-1",
+              cloudImage: { architecture: "amd64", osName: "Ubuntu" },
+            },
+          ],
+        },
+      ],
+      instanceTypes: { small: [{ code: "m5.large", cpu: 2, ramGb: 8 }] },
+    });
+    expect(encoded).not.toContain("server_image");
+    expect(encoded).not.toContain("internal-image-id");
   });
 });

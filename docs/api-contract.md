@@ -18,9 +18,11 @@ older Console image.
 The MCP client calls only these GET endpoints:
 
 - `GET /version`
+- `GET /external/deployments`
 - `GET /projects`
 - `GET /environments`
 - `GET /clusters`
+- `GET /clusters/default_name`
 - `GET /clusters/{id}`
 - `GET /operations`
 - `GET /operations/{id}/log`
@@ -41,5 +43,10 @@ Cluster listing passes through the documented `name`, `status`, `location`,
 `created_at_to`, and `sort_by` query parameters. Operation listing supports
 `sort_by` in addition to its project, date, and operation filters. Sort fields
 are restricted to the values listed in the pinned Swagger contract.
+
+Deployment responses project supported deployment, region, datacenter,
+instance-type, and volume fields onto an explicit allowlist. The nested raw
+cloud image configuration is not returned. The cluster default-name endpoint
+returns only the suggested name.
 
 No write, scaling, secret-management, or arbitrary REST operation is exposed.

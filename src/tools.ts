@@ -3,7 +3,13 @@ import { z } from "zod";
 import type { AutobaseApiClient } from "./api-client";
 import { AutobaseApiError } from "./api-client";
 import { redactOperationLog, redactText } from "./redaction";
-import type { Cluster, Environment, Operation, Project } from "./schemas";
+import type {
+  Cluster,
+  Deployment,
+  Environment,
+  Operation,
+  Project,
+} from "./schemas";
 
 const API_SPEC_VERSION = "2.11.0";
 const pageInput = {
@@ -109,6 +115,62 @@ function environmentForTool(environment: Environment) {
   };
 }
 
+export function deploymentForTool(deployment: Deployment) {
+  return {
+    code: deployment.code,
+    description: deployment.description,
+    avatarUrl: deployment.avatar_url,
+    regions: deployment.cloud_regions?.map((region) => ({
+      code: region.code,
+      name: region.name,
+      datacenters: region.datacenters?.map((datacenter) => ({
+        code: datacenter.code,
+        location: datacenter.location,
+        cloudImage: datacenter.cloud_image
+          ? {
+              architecture: datacenter.cloud_image.arch,
+              osName: datacenter.cloud_image.os_name,
+              osVersion: datacenter.cloud_image.os_version,
+              updatedAt: datacenter.cloud_image.updated_at,
+            }
+          : undefined,
+      })),
+    })),
+    instanceTypes: deployment.instance_types
+      ? {
+          small: deployment.instance_types.small?.map(instanceTypeForTool),
+          medium: deployment.instance_types.medium?.map(instanceTypeForTool),
+          large: deployment.instance_types.large?.map(instanceTypeForTool),
+        }
+      : undefined,
+    volumes: deployment.volumes?.map((volume) => ({
+      type: volume.volume_type,
+      description: volume.volume_description,
+      minSizeGb: volume.min_size,
+      maxSizeGb: volume.max_size,
+      monthlyPrice: volume.price_monthly,
+      currency: volume.currency,
+      isDefault: volume.is_default,
+    })),
+  };
+}
+
+function instanceTypeForTool(
+  instanceType: NonNullable<
+    NonNullable<Deployment["instance_types"]>["small"]
+  >[number],
+) {
+  return {
+    code: instanceType.code,
+    cpu: instanceType.cpu,
+    sharedCpu: instanceType.shared_cpu,
+    ramGb: instanceType.ram,
+    hourlyPrice: instanceType.price_hourly,
+    monthlyPrice: instanceType.price_monthly,
+    currency: instanceType.currency,
+  };
+}
+
 export function clusterForTool(cluster: Cluster) {
   return {
     id: cluster.id,
@@ -189,6 +251,21 @@ export function registerTools(
   registerReadTool(
     server,
     apiToken,
+    "autobase_list_deployments",
+    "List cloud deployment options, regions, instance types, and volumes supported by the Console.",
+    z.object(pageInput),
+    async (input) => {
+      const response = await api.listDeployments(input);
+      return {
+        data: response.data.map(deploymentForTool),
+        meta: paginationForTool(response.meta, input, response.data.length),
+      };
+    },
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
     "autobase_list_projects",
     "List Autobase projects. Use this to find a project ID before requesting its clusters or operations.",
     z.object(pageInput),
@@ -241,6 +318,15 @@ export function registerTools(
         meta: paginationForTool(response.meta, filters, response.data.length),
       };
     },
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
+    "autobase_get_cluster_default_name",
+    "Get the default cluster name suggested by the Console.",
+    z.object({}),
+    async () => api.getClusterDefaultName(),
   );
 
   registerReadTool(

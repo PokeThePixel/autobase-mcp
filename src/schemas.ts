@@ -34,6 +34,82 @@ export const environmentSchema = z
   })
   .passthrough();
 
+const deploymentInstanceTypeSchema = z
+  .object({
+    code: z.string(),
+    cpu: z.number().nullable().optional(),
+    shared_cpu: z.boolean().nullable().optional(),
+    ram: z.number().nullable().optional(),
+    price_hourly: z.number().nullable().optional(),
+    price_monthly: z.number().nullable().optional(),
+    currency: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export const deploymentSchema = z
+  .object({
+    code: z.string(),
+    description: z.string().optional(),
+    avatar_url: z.string().optional(),
+    cloud_regions: z
+      .array(
+        z
+          .object({
+            code: z.string(),
+            name: z.string().optional(),
+            datacenters: z
+              .array(
+                z
+                  .object({
+                    code: z.string(),
+                    location: z.string().optional(),
+                    cloud_image: z
+                      .object({
+                        arch: z.string().optional(),
+                        os_name: z.string().optional(),
+                        os_version: z.string().optional(),
+                        updated_at: z.string().optional(),
+                      })
+                      .passthrough()
+                      .optional(),
+                  })
+                  .passthrough(),
+              )
+              .optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    instance_types: z
+      .object({
+        small: z.array(deploymentInstanceTypeSchema).nullable().optional(),
+        medium: z.array(deploymentInstanceTypeSchema).nullable().optional(),
+        large: z.array(deploymentInstanceTypeSchema).nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
+    volumes: z
+      .array(
+        z
+          .object({
+            volume_type: z.string(),
+            volume_description: z.string().optional(),
+            min_size: z.number().optional(),
+            max_size: z.number().optional(),
+            price_monthly: z.number().optional(),
+            currency: z.string().optional(),
+            is_default: z.boolean().nullable().optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .passthrough();
+
+export const clusterDefaultNameSchema = z
+  .object({ name: z.string() })
+  .passthrough();
+
 export const clusterServerSchema = z
   .object({
     id: z.number().int().optional(),
@@ -110,6 +186,7 @@ export const versionResponseListSchema = z
 
 export type Cluster = z.infer<typeof clusterSchema>;
 export type Environment = z.infer<typeof environmentSchema>;
+export type Deployment = z.infer<typeof deploymentSchema>;
 export type Operation = z.infer<typeof operationSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;

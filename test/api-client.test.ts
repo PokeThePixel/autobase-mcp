@@ -98,6 +98,46 @@ describe("AutobaseApiClient", () => {
     );
   });
 
+  test("reads paginated deployment options", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toBe("/api/v1/external/deployments");
+        expect(url.searchParams.get("offset")).toBe("10");
+        return Response.json({
+          data: [{ code: "aws", cloud_regions: [] }],
+          meta: { count: 11, limit: 10, offset: 10 },
+        });
+      },
+    });
+
+    await expect(
+      client.listDeployments({ limit: 10, offset: 10 }),
+    ).resolves.toMatchObject({
+      data: [{ code: "aws" }],
+      meta: { count: 11, limit: 10, offset: 10 },
+    });
+  });
+
+  test("reads the Console's suggested cluster name", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        expect(new URL(String(input)).pathname).toBe(
+          "/api/v1/clusters/default_name",
+        );
+        return Response.json({ name: "postgres-cluster-01" });
+      },
+    });
+
+    await expect(client.getClusterDefaultName()).resolves.toEqual({
+      name: "postgres-cluster-01",
+    });
+  });
+
   test("does not include API error response bodies in errors", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",

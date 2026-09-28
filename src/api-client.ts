@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import {
+  clusterDefaultNameSchema,
   clusterSchema,
+  deploymentSchema,
   environmentSchema,
   extensionSchema,
   listResponseSchema,
@@ -78,6 +80,14 @@ export class AutobaseApiClient {
     return this.get("version", versionResponseSchema);
   }
 
+  listDeployments(options: PageOptions = {}) {
+    return this.get(
+      "external/deployments",
+      listResponseSchema(deploymentSchema),
+      options,
+    );
+  }
+
   listProjects(options: PageOptions = {}) {
     return this.get("projects", listResponseSchema(projectSchema), options);
   }
@@ -109,6 +119,10 @@ export class AutobaseApiClient {
 
   getCluster(clusterId: number) {
     return this.get(`clusters/${clusterId}`, clusterSchema);
+  }
+
+  getClusterDefaultName() {
+    return this.get("clusters/default_name", clusterDefaultNameSchema);
   }
 
   listOperations(filters: OperationFilters) {
