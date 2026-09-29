@@ -11,6 +11,7 @@ import type {
   Operation,
   PostgresParameter,
   Project,
+  SecretInfo,
 } from "./schemas";
 import {
   clusterAccessInputSchema,
@@ -36,6 +37,12 @@ const operationSortBy = z
   .string()
   .regex(
     /^-?(id|cluster_name|type|status|started|finished|cluster|environment)(,-?(id|cluster_name|type|status|started|finished|cluster|environment))*$/,
+  )
+  .optional();
+const secretSortBy = z
+  .string()
+  .regex(
+    /^-?(id|name|type|created_at|updated_at)(,-?(id|name|type|created_at|updated_at))*$/,
   )
   .optional();
 const writeConfirmation = z
@@ -164,6 +171,19 @@ function environmentForTool(environment: Environment) {
     description: environment.description,
     createdAt: environment.created_at,
     updatedAt: environment.updated_at,
+  };
+}
+
+export function secretForTool(secret: SecretInfo) {
+  return {
+    id: secret.id,
+    projectId: secret.project_id,
+    name: secret.name,
+    type: secret.type,
+    createdAt: secret.created_at,
+    updatedAt: secret.updated_at,
+    isUsed: secret.is_used,
+    usedByClusters: secret.used_by_clusters,
   };
 }
 
@@ -378,6 +398,43 @@ export function registerTools(
       return {
         data: response.data.map(environmentForTool),
         meta: paginationForTool(response.meta, input, response.data.length),
+      };
+    },
+  );
+
+  registerReadTool(
+    server,
+    apiToken,
+    "autobase_list_secrets",
+    "List secret names, types, IDs, and usage for a project. Secret contents are never returned. Use this to find an existing SSH or cloud secret ID before creating or managing a cluster.",
+    z.object({
+      projectId: z.number().int().positive(),
+      name: z.string().optional(),
+      type: z
+        .enum([
+          "aws",
+          "gcp",
+          "hetzner",
+          "ssh_key",
+          "digitalocean",
+          "password",
+          "azure",
+        ])
+        .optional(),
+      sortBy: secretSortBy,
+      ...pageInput,
+    }),
+    async ({ projectId, name, type, sortBy, ...page }) => {
+      const response = await api.listSecrets({
+        projectId,
+        name,
+        type,
+        sortBy,
+        ...page,
+      });
+      return {
+        data: response.data.map(secretForTool),
+        meta: paginationForTool(response.meta, page, response.data.length),
       };
     },
   );
@@ -637,7 +694,7 @@ export function registerTools(
     server,
     apiToken,
     "autobase_create_cluster",
-    "Create and provision a cluster through Autobase Console. This may incur cloud charges. Configure the deployment with extraVars and envs, and use secretId to reference a secret already stored in Console. Do not put credentials in extraVars or envs because they are sent to Autobase. Requires an explicit user request and confirm: true.",
+    "Create and provision a cluster through Autobase Console. This may incur cloud charges. For cloud deployments, configure extraVars and envs and use cloudSecretId for a saved cloud credential. For own-machine deployments, provide localMachine with SSH username, PostgreSQL version, Patroni name, nodes, and sshSecretId from autobase_list_secrets. The MCP builds the inventory. Do not put credentials in extraVars or envs because they are sent to Autobase. Requires an explicit user request and confirm: true.",
     clusterCreateInputSchema.extend({ confirm: writeConfirmation }),
     { destructive: true, idempotent: false },
     async ({ confirm: _confirm, ...input }) => {

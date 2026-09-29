@@ -5,12 +5,14 @@ import {
   clusterManageInputSchema,
   clusterSchema,
   deploymentSchema,
+  secretInfoSchema,
 } from "../src/schemas";
 import {
   clusterForTool,
   deploymentForTool,
   paginationForTool,
   postgresParameterForTool,
+  secretForTool,
 } from "../src/tools";
 
 describe("cluster tool projection", () => {
@@ -71,6 +73,29 @@ describe("PostgreSQL parameter projection", () => {
       name: "work_mem",
       setting: "password=[REDACTED]",
     });
+  });
+});
+
+describe("saved secret metadata projection", () => {
+  test("returns the secret ID and type but never its value", () => {
+    const result = secretForTool(
+      secretInfoSchema.parse({
+        id: 18,
+        project_id: 34,
+        name: "Production SSH",
+        type: "ssh_key",
+        private_key: "do-not-return",
+        value: "do-not-return",
+      }),
+    );
+
+    expect(result).toMatchObject({
+      id: 18,
+      projectId: 34,
+      name: "Production SSH",
+      type: "ssh_key",
+    });
+    expect(JSON.stringify(result)).not.toContain("do-not-return");
   });
 });
 
@@ -180,6 +205,18 @@ describe("cluster configuration input", () => {
         extraVars: { cloud_provider: "aws", server_count: 3 },
       }).success,
     ).toBe(true);
+    expect(
+      clusterCreateInputSchema.safeParse({
+        name: "analytics",
+        projectId: 5,
+        localMachine: {
+          sshUsername: "postgres-admin",
+          postgresVersion: 17,
+          patroniClusterName: "analytics",
+          nodes: [{ hostname: "db-1", ipAddress: "192.0.2.10" }],
+        },
+      }).success,
+    ).toBe(false);
   });
 
   test("accepts documented maintenance settings and validates added nodes", () => {

@@ -32,6 +32,7 @@ The MCP client calls these read endpoints:
 - `GET /external/deployments`
 - `GET /projects`
 - `GET /environments`
+- `GET /secrets`
 - `GET /clusters`
 - `GET /clusters/default_name`
 - `GET /clusters/{id}`
@@ -60,6 +61,13 @@ The MCP client also exposes these write and remote-action endpoints:
 Every JSON response is parsed against a Zod schema. Tool results project API
 objects onto an explicit field allowlist. In particular, cluster results omit
 `connection_info`, `extra_vars`, and `inventory`.
+
+For own-machine deployments, the MCP's `localMachine` input collects the
+SSH username, PostgreSQL version, Patroni name, and each node's hostname, IP,
+SSH port, and location. It builds the `ANSIBLE_INVENTORY_JSON` environment
+value in the format used by Autobase's Console UI. The input requires a saved
+SSH credential ID. `autobase_list_secrets` returns the ID and metadata only;
+it never returns the password or key.
 
 List tools accept `limit` and `offset` and return `meta.hasMore` and
 `meta.nextOffset`. When the API supplies a total count, the server uses it to
@@ -104,12 +112,18 @@ summary, including those IDs, never the secret values.
 `GET /operations/{id}` returns one operation's status and metadata, including
 the user name when the Console provides it.
 
+`GET /secrets` accepts a project ID, optional name/type filters, sorting, and
+pagination. It returns only secret metadata needed to select an existing
+credential, including its ID, name, type, and usage. Secret values are not
+included in the schema or tool result. Secret create, update, and delete
+endpoints remain unavailable.
+
 Write tools and remote cluster actions require `confirm: true`. Cluster and server delete calls remove
 records from the Console database and do not claim to delete running
 infrastructure. Cluster creation accepts `extra_vars` and `envs` for
 provisioning. Both fields are sent to Autobase, so credentials should go
-through a stored Console secret ID instead. The `/settings` and `/secrets`
-endpoints remain unavailable.
+through a stored Console secret ID instead. `/settings` and secret write
+endpoints remain unavailable. The secrets list is metadata-only.
 Write tools are not registered unless the operator sets
 `AUTOBASE_ENABLE_WRITE_TOOLS=true` or passes
 `--enable-write-tools=true` as a command argument. The argument overrides the

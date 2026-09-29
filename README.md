@@ -203,21 +203,48 @@ references for credentials. Do not put passwords or keys in `extraVars`,
 
 Read tools inspect projects, environments, clusters, operations, deployments,
 PostgreSQL versions, parameters, and extensions. Cluster responses omit
-connection details, Ansible variables, and inventory. With write tools
-enabled, Copilot can also request backup records by running the Console's
-backup-list playbook.
+connection details, Ansible variables, and inventory. `autobase_list_secrets`
+shows saved secret IDs, names, types, and usage for a project. It does not
+return the saved passwords or keys.
 
 With write tools enabled, Copilot can create and update projects, create
 environments and clusters, manage existing clusters with the Console's
 documented playbooks, update stored cluster access references, refresh cluster
 status, and remove project, environment, cluster, or server records.
 
+### Create a cluster on your own servers
+
+First ask Copilot to find the saved SSH key ID. Replace `34` with the project
+ID from your Console:
+
+> List the SSH key secrets for project 34. Show the ID and name, but do not
+> reveal any secret contents.
+
+Use that ID when you ask Copilot to create the cluster. Give it the SSH
+username, PostgreSQL version, Patroni name, hostnames, IP addresses, and SSH
+ports. For example:
+
+> Create a PostgreSQL 17 cluster named analytics in project 34 using saved SSH
+> key ID 18. The SSH username is postgres-admin. Use Patroni name analytics.
+> The primary is db-1 at 192.0.2.10 on SSH port 2222 in dc-east. Add db-2 at
+> 192.0.2.11 as a replica. Show me the exact settings and ask for confirmation
+> before creating it.
+
+The `localMachine` input requires the saved SSH secret ID, username, PostgreSQL
+version, Patroni name, and nodes. It builds Autobase's inventory from those
+fields. The first node becomes the primary, and later nodes become replicas.
+The MCP sends the saved secret ID to Console, never the key or password
+itself. Enter the database servers that Autobase should configure, not the
+Console host, unless the Console host is also a database server. The Console
+host must be able to reach each listed server over SSH.
+
 `autobase_manage_cluster` returns an operation ID. Copilot can pass that ID to
 `autobase_get_operation` to check its status or `autobase_get_operation_log` to
 read the redacted, capped operation log.
 
-The server does not expose Autobase's settings or secrets endpoints, arbitrary
-HTTP requests, SQL, shell, or Docker.
+The server does not expose settings, secret contents, or secret create/update/
+delete operations. It also does not expose arbitrary HTTP requests, SQL, shell,
+or Docker.
 
 ## Troubleshooting
 

@@ -98,6 +98,39 @@ describe("AutobaseApiClient", () => {
     );
   });
 
+  test("lists secret metadata without secret values", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toBe("/api/v1/secrets");
+        expect(url.searchParams.get("project_id")).toBe("34");
+        expect(url.searchParams.get("type")).toBe("ssh_key");
+        expect(url.searchParams.get("limit")).toBe("10");
+        return Response.json({
+          data: [
+            {
+              id: 18,
+              project_id: 34,
+              name: "Production SSH",
+              type: "ssh_key",
+              is_used: false,
+            },
+          ],
+          meta: { count: 1, limit: 10, offset: 0 },
+        });
+      },
+    });
+
+    await expect(
+      client.listSecrets({ projectId: 34, type: "ssh_key", limit: 10 }),
+    ).resolves.toMatchObject({
+      data: [{ id: 18, name: "Production SSH", type: "ssh_key" }],
+      meta: { count: 1, limit: 10, offset: 0 },
+    });
+  });
+
   test("reads paginated deployment options", async () => {
     const client = new AutobaseApiClient({
       apiBaseUrl: "https://console.example.com/api/v1/",
@@ -166,7 +199,7 @@ describe("AutobaseApiClient", () => {
         name: "analytics",
         projectId: 5,
         environmentId: 2,
-        secretId: 9,
+        cloudSecretId: 9,
         existingCluster: false,
         extraVars: {
           cloud_provider: "aws",
@@ -175,6 +208,116 @@ describe("AutobaseApiClient", () => {
         },
       }),
     ).resolves.toEqual({ cluster_id: 12, operation_id: 30 });
+  });
+
+  test("builds inventory from own-machine host details", async () => {
+    const client = new AutobaseApiClient({
+      apiBaseUrl: "https://console.example.com/api/v1/",
+      apiToken: "private-token",
+      fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(new URL(String(input)).pathname).toBe("/api/v1/clusters");
+        const body: unknown = JSON.parse(String(init?.body));
+        expect(body).toMatchObject({
+          project_id: 34,
+          auth_info: { secret_id: 18 },
+          extra_vars: {
+            postgresql_version: 17,
+            patroni_cluster_name: "analytics",
+            server_location: "dc-east",
+          },
+        });
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          !("envs" in body) ||
+          !Array.isArray(body.envs)
+        ) {
+          throw new Error("Expected generated environment values.");
+        }
+
+        const inventorySetting = body.envs[0];
+        if (typeof inventorySetting !== "string") {
+          throw new Error("Expected generated Ansible inventory.");
+        }
+
+        const [settingName, encodedInventory] = inventorySetting.split("=");
+        expect(settingName).toBe("ANSIBLE_INVENTORY_JSON");
+        const inventoryText = Buffer.from(
+          encodedInventory ?? "",
+          "base64",
+        ).toString("utf8");
+        expect(JSON.parse(inventoryText)).toEqual({
+          all: {
+            vars: { ansible_user: "postgres-admin" },
+            children: {
+              balancers: { hosts: {} },
+              etcd_cluster: {
+                hosts: {
+                  "192.0.2.10": {
+                    ansible_host: "192.0.2.10",
+                    bind_address: "192.0.2.10",
+                    ansible_ssh_port: 2222,
+                  },
+                  "192.0.2.11": {
+                    ansible_host: "192.0.2.11",
+                    bind_address: "192.0.2.11",
+                  },
+                },
+              },
+              consul_instances: { hosts: {} },
+              master: {
+                hosts: {
+                  "192.0.2.10": {
+                    hostname: "db-1",
+                    ansible_host: "192.0.2.10",
+                    bind_address: "192.0.2.10",
+                    ansible_ssh_port: 2222,
+                    server_location: "dc-east",
+                    postgresql_exists: false,
+                  },
+                },
+              },
+              replica: {
+                hosts: {
+                  "192.0.2.11": {
+                    hostname: "db-2",
+                    ansible_host: "192.0.2.11",
+                    bind_address: "192.0.2.11",
+                    postgresql_exists: false,
+                  },
+                },
+              },
+              postgres_cluster: {
+                children: { master: {}, replica: {} },
+              },
+            },
+          },
+        });
+        return Response.json({ cluster_id: 42, operation_id: 71 });
+      },
+    });
+
+    await expect(
+      client.createCluster({
+        name: "analytics",
+        projectId: 34,
+        localMachine: {
+          sshSecretId: 18,
+          sshUsername: "postgres-admin",
+          postgresVersion: 17,
+          patroniClusterName: "analytics",
+          nodes: [
+            {
+              hostname: "db-1",
+              ipAddress: "192.0.2.10",
+              sshPort: 2222,
+              location: "dc-east",
+            },
+            { hostname: "db-2", ipAddress: "192.0.2.11" },
+          ],
+        },
+      }),
+    ).resolves.toEqual({ cluster_id: 42, operation_id: 71 });
   });
 
   test("maps project updates and validates the returned project", async () => {

@@ -17,6 +17,7 @@ import {
   type projectCreateInputSchema,
   projectSchema,
   type projectUpdateInputSchema,
+  secretInfoSchema,
   versionResponseListSchema,
   versionResponseSchema,
 } from "./schemas";
@@ -34,6 +35,13 @@ type ApiClientOptions = {
   apiBaseUrl: string;
   apiToken: string;
   fetchImpl?: FetchImplementation;
+};
+
+export type SecretFilters = PageOptions & {
+  projectId: number;
+  name?: string;
+  type?: string;
+  sortBy?: string;
 };
 
 type FetchImplementation = (
@@ -80,6 +88,70 @@ type EnvironmentCreateInput = z.infer<typeof environmentCreateInputSchema>;
 type ClusterCreateInput = z.infer<typeof clusterCreateInputSchema>;
 type ClusterManageInput = z.infer<typeof clusterManageInputSchema>;
 type ClusterAccessInput = z.infer<typeof clusterAccessInputSchema>;
+
+type LocalMachineCluster = NonNullable<ClusterCreateInput["localMachine"]>;
+type LocalMachineNode = LocalMachineCluster["nodes"][number];
+
+function createLocalMachineInventory(
+  localMachine: LocalMachineCluster,
+): string {
+  const allNodeHosts = Object.fromEntries(
+    localMachine.nodes.map((node) => [
+      node.ipAddress,
+      {
+        ansible_host: node.ipAddress,
+        bind_address: node.ipAddress,
+        ...(node.sshPort === undefined
+          ? {}
+          : { ansible_ssh_port: node.sshPort }),
+      },
+    ]),
+  );
+
+  const databaseHost = (node: LocalMachineNode) => ({
+    hostname: node.hostname,
+    ansible_host: node.ipAddress,
+    bind_address: node.ipAddress,
+    ...(node.sshPort === undefined ? {} : { ansible_ssh_port: node.sshPort }),
+    ...(node.location === undefined ? {} : { server_location: node.location }),
+    postgresql_exists: node.postgresqlExists ?? false,
+  });
+
+  const [primaryNode, ...replicaNodes] = localMachine.nodes;
+  if (!primaryNode) {
+    throw new Error("A local-machine cluster requires at least one node.");
+  }
+
+  const primaryHost = { [primaryNode.ipAddress]: databaseHost(primaryNode) };
+  const replicaHosts = Object.fromEntries(
+    replicaNodes.map((node) => [node.ipAddress, databaseHost(node)]),
+  );
+
+  const inventory = {
+    all: {
+      vars: { ansible_user: localMachine.sshUsername },
+      children: {
+        balancers: { hosts: {} },
+        etcd_cluster: { hosts: allNodeHosts },
+        consul_instances: { hosts: {} },
+        master: { hosts: primaryHost },
+        replica: { hosts: replicaHosts },
+        postgres_cluster: {
+          children: {
+            master: {},
+            replica: {},
+          },
+        },
+      },
+    },
+  };
+  const encodedInventory = Buffer.from(
+    JSON.stringify(inventory),
+    "utf8",
+  ).toString("base64");
+
+  return `ANSIBLE_INVENTORY_JSON=${encodedInventory}`;
+}
 
 export class AutobaseApiClient {
   private readonly apiBaseUrl: URL;
@@ -133,6 +205,18 @@ export class AutobaseApiClient {
     );
   }
 
+  listSecrets(filters: SecretFilters) {
+    const { projectId, name, type, sortBy, limit, offset } = filters;
+    return this.get("secrets", listResponseSchema(secretInfoSchema), {
+      project_id: projectId,
+      name,
+      type,
+      sort_by: sortBy,
+      limit,
+      offset,
+    });
+  }
+
   getCluster(clusterId: number) {
     return this.get(`clusters/${clusterId}`, clusterSchema);
   }
@@ -169,19 +253,35 @@ export class AutobaseApiClient {
     const {
       projectId,
       environmentId,
-      secretId,
+      cloudSecretId,
       envs,
       extraVars,
       existingCluster,
+      localMachine,
       ...body
     } = input;
+    const localMachineInventory = localMachine
+      ? createLocalMachineInventory(localMachine)
+      : undefined;
+    const secretId = localMachine?.sshSecretId ?? cloudSecretId;
+    const localMachineExtraVars = localMachine
+      ? {
+          postgresql_version: localMachine.postgresVersion,
+          patroni_cluster_name: localMachine.patroniClusterName,
+          ...(localMachine.nodes[0]?.location
+            ? { server_location: localMachine.nodes[0].location }
+            : {}),
+        }
+      : {};
     return this.writeJson("POST", "clusters", clusterCreateResponseSchema, {
       ...body,
       project_id: projectId,
       environment_id: environmentId,
-      auth_info: secretId ? { secret_id: secretId } : undefined,
-      envs,
-      extra_vars: extraVars,
+      auth_info: secretId === undefined ? undefined : { secret_id: secretId },
+      envs: localMachineInventory
+        ? [localMachineInventory, ...(envs ?? [])]
+        : envs,
+      extra_vars: { ...extraVars, ...localMachineExtraVars },
       existing_cluster: existingCluster,
     });
   }

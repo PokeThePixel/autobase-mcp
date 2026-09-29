@@ -125,15 +125,89 @@ export const environmentCreateInputSchema = z.strictObject({
   description: z.string().optional(),
 });
 
+const localMachineNodeSchema = z.strictObject({
+  hostname: z
+    .string()
+    .min(1)
+    .describe("DNS hostname for this database server."),
+  ipAddress: z
+    .string()
+    .min(1)
+    .describe(
+      "IP address of the database server that the Console host can reach. Do not use the Console host IP unless it is also a database server.",
+    ),
+  sshPort: z
+    .number()
+    .int()
+    .min(1)
+    .max(65535)
+    .optional()
+    .describe("SSH port. Defaults to 22 when omitted."),
+  location: z.string().optional().describe("Optional server location label."),
+  postgresqlExists: z
+    .boolean()
+    .optional()
+    .describe("Set true if PostgreSQL is already installed on this node."),
+});
+
+const localMachineClusterSchema = z.strictObject({
+  sshSecretId: z
+    .number()
+    .int()
+    .positive()
+    .describe("ID of an existing SSH-key or password secret in this project."),
+  sshUsername: z
+    .string()
+    .min(1)
+    .describe("SSH username for the database servers, for example root."),
+  postgresVersion: z
+    .number()
+    .int()
+    .positive()
+    .describe("PostgreSQL major version to install."),
+  patroniClusterName: z
+    .string()
+    .min(1)
+    .describe("Patroni cluster name, for example analytics."),
+  nodes: z
+    .array(localMachineNodeSchema)
+    .min(1)
+    .describe(
+      "Database servers. The first node becomes the primary; later nodes become replicas.",
+    ),
+});
+
 export const clusterCreateInputSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().optional(),
   projectId: z.number().int().positive(),
   environmentId: z.number().int().positive().optional(),
-  secretId: z.number().int().positive().optional(),
-  envs: z.array(z.string()).optional(),
-  extraVars: z.record(z.string(), z.unknown()).optional(),
+  cloudSecretId: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "ID of a saved cloud-provider credential. Find it with autobase_list_secrets.",
+    ),
+  envs: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Environment entries sent to Autobase during provisioning. Do not place credential values here.",
+    ),
+  extraVars: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "Additional documented Autobase/Ansible variables. Do not put credentials here.",
+    ),
   existingCluster: z.boolean().optional(),
+  localMachine: localMachineClusterSchema
+    .optional()
+    .describe(
+      "For own-machine or on-prem deployments. Provide the SSH username, PostgreSQL version, Patroni cluster name, and database node IPs/hostnames. The first node becomes the primary and the rest replicas. Use secretId to select a saved SSH key or password secret.",
+    ),
 });
 
 export const clusterCreateResponseSchema = z
@@ -214,6 +288,19 @@ export const clusterBackupSchema = z
 export const clusterBackupListSchema = z
   .object({
     data: z.array(clusterBackupSchema),
+  })
+  .passthrough();
+
+export const secretInfoSchema = z
+  .object({
+    id: z.number().int().optional(),
+    project_id: z.number().int().optional(),
+    name: z.string().optional(),
+    type: z.string().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().nullable().optional(),
+    is_used: z.boolean().optional(),
+    used_by_clusters: z.string().nullable().optional(),
   })
   .passthrough();
 
@@ -303,3 +390,4 @@ export type Pagination = z.infer<typeof paginationSchema>;
 export type PostgresVersion = z.infer<typeof postgresVersionSchema>;
 export type PostgresParameter = z.infer<typeof postgresParameterSchema>;
 export type ClusterBackup = z.infer<typeof clusterBackupSchema>;
+export type SecretInfo = z.infer<typeof secretInfoSchema>;
